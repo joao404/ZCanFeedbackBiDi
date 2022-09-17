@@ -17,8 +17,8 @@
 #include "FeedbackDecoder.h"
 
 FeedbackDecoder::FeedbackDecoder(bool debug)
-    : ZCanInterfaceObserver(debug),
-      id(nidMin + 5),
+    : ZCanInterfaceObserver(nidMin + 5, debug),
+      m_accessoryId(0x0004),
       m_lastCanCmdSendINms(0),
       m_pingJitterINms(random(0, 100)),
       m_pingIntervalINms(9990 - m_pingJitterINms),
@@ -62,25 +62,25 @@ void FeedbackDecoder::begin()
     Serial.printf("Modul: SN%u BD%u MA%u CH2%u\n",
                   m_modulConfig.serialnumber, m_modulConfig.builddate, m_modulConfig.modulAdress, m_modulConfig.sendChannel2Data);
 
-    pinMode(dccPin, OUTPUT);
-    Dcc.pin(dccPin, 0);
-    Dcc.init(MAN_ID_DIY, 10, CV29_ACCESSORY_DECODER | CV29_OUTPUT_ADDRESS_MODE, 0);
+    pinMode(m_dccPin, OUTPUT);
+    m_dcc.pin(m_dccPin, 0);
+    m_dcc.init(MAN_ID_DIY, 10, CV29_ACCESSORY_DECODER | CV29_OUTPUT_ADDRESS_MODE, 0);
 
     // Wait random time before starting logging to Z21
     delay(random(1, 20));
 
     // Send first ping
-    // TODO
+    sendPing(m_masterId, m_type, m_sessionId);
 }
 
 void FeedbackDecoder::cyclic()
 {
 
-    Dcc.process();
+    m_dcc.process();
     unsigned long currentTimeINms{millis()};
     if ((m_lastCanCmdSendINms + m_pingIntervalINms) < currentTimeINms)
     {
-        // sendPing();
+        sendPing(m_masterId, m_type, m_sessionId);
     }
 }
 
@@ -95,9 +95,22 @@ void notifyDccMsg(DCC_MSG *Msg)
     Serial.println();
 }
 
+bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, uint16_t adress1, uint16_t adress2, uint16_t adress3, uint16_t adress4)
+{
+    bool result = sendAccessoryDataEvt(m_accessoryId, port, 0x11, adress1, adress2);
+    result &= sendAccessoryDataEvt(m_accessoryId, port, 0x12, adress3, adress4);
+    return result;
+}
+
+bool FeedbackDecoder::notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied)
+{
+    uint16_t value = occupied ? 0x1100 : 0x0100;
+    return sendAccessoryPort6Evt(m_accessoryId, port, type, value);
+}
+
 bool FeedbackDecoder::onAccessoryStatus(uint16_t accessoryId)
 {
-    if (accessoryId == id)
+    if (accessoryId == m_accessoryId)
     {
         // current CtrlId needed and last time of command
         sendAccessoryStatus(accessoryId, static_cast<uint16_t>(AccessoryErrorCode::NoError), 0, 0xFFFF);
@@ -136,11 +149,34 @@ bool FeedbackDecoder::onAccessoryPort4(uint16_t accessoryId, uint8_t port, uint8
 
 bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type)
 {
+    bool result{false};
+    if (accessoryId == m_accessoryId)
+    {
+        result = sendAccessoryDataAck(m_accessoryId, port, type, 0x8022, 0);
+    }
+    return result;
+}
+
+bool FeedbackDecoder::onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
+{
+    bool result{false};
+    if (accessoryId == m_accessoryId)
+    {
+        if ((0x11 != type) || (0x12 != type))
+        {
+            // result = sendAccessoryDataAck(m_accessoryId, port, type, 0x8022, 0);
+        }
+    }
+    return result;
+}
+
+bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type)
+{
     // TODO
     return false;
 }
 
-bool FeedbackDecoder::onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
+bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value)
 {
     // TODO
     return false;
@@ -157,7 +193,37 @@ bool FeedbackDecoder::onRequestModulInfo(uint16_t id, uint16_t type)
     // TODO
     //__TIME__
     //__DATE__
-    return false;
+    bool result{false};
+    if (id == m_networkId)
+    {
+        result = true;
+        switch (type)
+        {
+        case 1:
+            sendModuleInfoAck(type, 0x01020304);
+            break;
+        case 2:
+            sendModuleInfoAck(type, 0x01020304);
+            break;
+        case 3:
+            sendModuleInfoAck(type, 0x01020304);
+            break;
+        case 4:
+            sendModuleInfoAck(type, 0x00010200);
+            break;
+        case 20:
+            sendModuleInfoAck(type, 0x00000005);
+            break;
+        case 100:
+            sendModuleInfoAck(type, m_type);
+            break;
+
+        default:
+            result = false;
+            break;
+        }
+    }
+    return result;
 }
 
 bool FeedbackDecoder::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
@@ -167,12 +233,22 @@ bool FeedbackDecoder::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
 
 bool FeedbackDecoder::onRequestPing(uint16_t id)
 {
-    return false;
+    bool result{false};
+    if(id == nidMin)
+    {
+        result = sendPing(m_masterId, m_type, m_sessionId);
+    }
+    return result;
 }
 
 bool FeedbackDecoder::onPing(uint16_t id, uint32_t masterUid, uint16_t type, uint16_t sessionId)
 {
-    return false;
+    if((masterUid != m_masterId) && (0x0200 == (type & 0xFF00)))
+    {
+        m_masterId = masterUid;
+        m_sessionId = sessionId;
+    }
+    return true;
 }
 
 bool FeedbackDecoder::sendMessage(ZCanMessage &message)

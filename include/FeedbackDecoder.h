@@ -31,16 +31,6 @@ public:
     void cyclic();
 
 protected:
-    NmraDcc Dcc;
-    DCC_MSG Packet;
-
-    uint8_t dccPin{2};
-
-    const uint16_t nidMax{0xD000};
-    const uint16_t nidMin{0xDFFF};
-
-    uint16_t id;
-
     virtual bool onAccessoryStatus(uint16_t accessoryId) override;
 
     virtual bool onAccessoryMode(uint16_t accessoryId) override;
@@ -55,6 +45,10 @@ protected:
 
     virtual bool onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value) override;
 
+    virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type) override;
+
+    virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value) override;
+
     virtual bool onRequestModulPowerInfo(uint16_t id, uint8_t port) override;
 
     virtual bool onRequestModulInfo(uint16_t id, uint16_t type) override;
@@ -65,17 +59,36 @@ protected:
 
     virtual bool onPing(uint16_t nid, uint32_t masterUid, uint16_t type, uint16_t sessionId) override;
 
+    bool sendMessage(ZCanMessage &message) override;
+
+    NmraDcc m_dcc;
+    DCC_MSG m_dccPacket;
+
+    uint8_t m_dccPin{2};
+
+    const uint16_t nidMin{0xD000};
+    const uint16_t nidMax{0xDFFF};
+
+    uint8_t m_buttonPin{3};
+
+    uint16_t m_accessoryId;
+
     unsigned long m_lastCanCmdSendINms;
 
     uint16_t m_pingJitterINms;
 
     unsigned long m_pingIntervalINms;
 
-    bool sendMessage(ZCanMessage &message) override;
-
     uint32_t m_masterId;
 
     uint16_t m_sessionId;
+
+    uint16_t m_type{0x9201};
+
+    // adress is 0x8000 up tp 0xC000
+    bool notifyLocoInBlock(uint8_t port, uint16_t adress1, uint16_t adress2, uint16_t adress3, uint16_t adress4);
+
+    bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
 
 private:
     typedef struct

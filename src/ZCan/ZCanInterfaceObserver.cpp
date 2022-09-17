@@ -16,8 +16,8 @@
 
 #include "ZCan/ZCanInterfaceObserver.h"
 
-ZCanInterfaceObserver::ZCanInterfaceObserver(bool debug)
-    : ZCanInterface(debug)
+ZCanInterfaceObserver::ZCanInterfaceObserver(uint16_t networkId, bool debug)
+    : ZCanInterface(networkId, debug)
 {
 }
 

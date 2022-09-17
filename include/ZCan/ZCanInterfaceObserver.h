@@ -31,7 +31,7 @@ public:
      * Creates a new TrackController with the given hash and debugging
      * flag. A zero hash will result in a unique hash begin generated.
      */
-    ZCanInterfaceObserver(bool debug);
+    ZCanInterfaceObserver(uint16_t networkId, bool debug);
 
     /**
      * Is called when a TrackController is being destroyed. Does the

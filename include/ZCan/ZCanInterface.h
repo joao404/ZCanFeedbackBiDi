@@ -109,8 +109,9 @@ public:
         Status = 0x00, // Jedes Steuersystem (Fahrpult, PC-Software) sollte den Zubehörstatus immer als erste Initialabfrage ausführen. Insbesondere für die MX8 und MX9 Module.
         Mode = 0x01,   // Dieses Datagramm dient der Abfrage und der Einstellung der Zubehörbetriebsart.
         Gpio = 0x02,   // Diese Datagramme dienen der effizienten Statusabfrage von simplen Ein-/Ausgängen. Es werden je Gruppe bis zu 32 Ein-/Ausgangszustände übertragen.
-        Port = 0x04,   // Wenn M = 0b00, DLC = 3, dann wird der Zustand des Ein/Ausganges (Port) vom Zubehör NID abgefragt.Durch M = 0b01, DLC = 4 wird der Ausgang des Zubehörs (NID) auf den angegeben Wert eingestellt.
-        Data = 0x05    // Mit diesen Datagrammen können Objektdaten abgefragt und gesetzt werden.
+        Port4 = 0x04,   // Wenn M = 0b00, DLC = 3, dann wird der Zustand des Ein/Ausganges (Port) vom Zubehör NID abgefragt.Durch M = 0b01, DLC = 4 wird der Ausgang des Zubehörs (NID) auf den angegeben Wert eingestellt.
+        Data = 0x05,    // Mit diesen Datagrammen können Objektdaten abgefragt und gesetzt werden.
+        Port6 = 0x06
     };
 
     enum class InfoCmd : uint8_t
@@ -130,7 +131,7 @@ public:
         Req = 0b00,
         Cmd = 0b01,
         Evt = 0b10,
-        ACK = 0b11
+        Ack = 0b11
     };
 
     enum class AccessoryErrorCode : uint8_t
@@ -146,11 +147,13 @@ public:
     };
 
 protected:
-    ZCanInterface(bool debug);
+    ZCanInterface(uint16_t networkId, bool debug);
 
     virtual ~ZCanInterface();
 
     bool m_debug;
+
+    bool m_networkId;
 
     virtual void begin();
 
@@ -182,6 +185,10 @@ protected:
 
     virtual bool onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value) { return false; };
 
+    virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type) { return false; };
+
+    virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value) { return false; };
+
     virtual bool onRequestModulPowerInfo(uint16_t id, uint8_t port) { return false; };
 
     virtual bool onRequestModulInfo(uint16_t id, uint16_t type) { return false; };
@@ -201,18 +208,22 @@ protected:
     bool sendAccessoryPort4Evt(uint16_t accessoryId, uint8_t port, uint8_t value);
     bool sendAccessoryPort4Ack(uint16_t accessoryId, uint8_t port, bool valid, uint8_t value);
 
-    bool sendAccessoryDataEvt(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value);
-    bool sendAccessoryDataAck(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value);
+    bool sendAccessoryDataEvt(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2);
+    bool sendAccessoryDataAck(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2);
 
-    bool requestModulePowerInfo(uint16_t sendId, uint16_t requestId);
-    bool requestModuleInfo(uint16_t sendId, uint16_t nid, uint16_t type);
-    bool getModuleInfo(uint16_t sendId, uint16_t nid, uint16_t type, uint32_t info);
-    bool sendModuleInfoEvt(uint16_t sendId, uint16_t type, uint32_t info);
+    bool requestAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type);
+    bool sendAccessoryPort6Evt(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value);
+    bool sendAccessoryPort6Ack(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value);
 
-    bool requestPing(uint16_t sendId, uint16_t requestId);
-    bool sendPing(uint16_t sendId, uint32_t masterUid, uint16_t type, uint16_t sessionId);
+    bool requestModulePowerInfo(uint16_t requestId);
+    bool requestModuleInfo(uint16_t nid, uint16_t type);
+    bool getModuleInfo(uint16_t nid, uint16_t type, uint32_t info);
+    bool sendModuleInfoAck(uint16_t type, uint32_t info);
 
-    bool requestPortOpen(uint16_t id);
+    bool requestPing(uint16_t id);
+    bool sendPing(uint32_t masterUid, uint16_t type, uint16_t sessionId);
+
+    bool requestPortOpen();
 
 private:
     void messageAccessoryStatus(ZCanMessage &message, uint16_t accessoryId, uint16_t state, uint16_t CtrlNID, uint16_t lastControlCmdINms);
@@ -224,16 +235,20 @@ private:
     void messageAccessoryPort4Evt(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t value);
     void messageAccessoryPort4Ack(ZCanMessage &message, uint16_t accessoryId, uint8_t port, bool valid, uint8_t value);
 
-    void messageAccessoryDataEvt(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value);
-    void messageAccessoryDataAck(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value);
+    void messageAccessoryDataEvt(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2);
+    void messageAccessoryDataAck(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2);
 
-    void messageRequestModulePowerInfo(ZCanMessage &message, uint16_t sendId, uint16_t requestId);
-    void messageRequestModuleInfo(ZCanMessage &message, uint16_t sendId, uint16_t nid, uint16_t type);
-    void messageCmdModuleInfo(ZCanMessage &message, uint16_t sendId, uint16_t nid, uint16_t type, uint32_t info);
-    void messageModuleInfoEvt(ZCanMessage &message, uint16_t sendId, uint16_t type, uint32_t info);
+    void messageRequestAccessoryPort6(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type);
+    void messageAccessoryPort6Evt(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value);
+    void messageAccessoryPort6Ack(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value);
 
-    void messageRequestPing(ZCanMessage &message, uint16_t sendId, uint16_t requestId);
-    void messagePing(ZCanMessage &message, uint16_t sendId, uint32_t masterUid, uint16_t type, uint16_t sessionId);
+    void messageRequestModulePowerInfo(ZCanMessage &message, uint16_t id);
+    void messageRequestModuleInfo(ZCanMessage &message, uint16_t id, uint16_t type);
+    void messageCmdModuleInfo(ZCanMessage &message, uint16_t id, uint16_t type, uint32_t info);
+    void messageModuleInfoAck(ZCanMessage &message, uint16_t type, uint32_t info);
 
-    void messageRequestPortOpen(ZCanMessage &message, uint16_t id);
+    void messageRequestPing(ZCanMessage &message, uint16_t id);
+    void messagePing(ZCanMessage &message, uint32_t masterUid, uint16_t type, uint16_t sessionId);
+
+    void messageRequestPortOpen(ZCanMessage &message);
 };

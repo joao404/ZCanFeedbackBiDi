@@ -19,8 +19,9 @@
 size_t printHex(Print &p, unsigned long hex, int digits);
 int parseHex(String &s, int start, int end, bool *ok);
 
-ZCanInterface::ZCanInterface(bool debug)
-    : m_debug(debug)
+ZCanInterface::ZCanInterface(uint16_t networkId, bool debug)
+    : m_debug(debug),
+    m_networkId(networkId)
 {
     if (m_debug)
     {
@@ -101,7 +102,7 @@ bool ZCanInterface::handleAccessoryMessage(ZCanMessage &message)
             messageHandled = onAccessoryGpio(accessoryId, type);
         }
         break;
-    case AccessoryCmd::Port:
+    case AccessoryCmd::Port4:
         if (Mode::Req == static_cast<Mode>(message.mode))
         {
             if (3 == message.length)
@@ -136,12 +137,33 @@ bool ZCanInterface::handleAccessoryMessage(ZCanMessage &message)
             {
                 uint8_t port = message.data[2];
                 uint8_t type = message.data[3];
-                uint32_t value = (message.data[7] << 24) | (message.data[6] << 16) | (message.data[5] << 8) | message.data[4];
+                uint16_t value = (message.data[7] << 24) | (message.data[6] << 16) |(message.data[5] << 8) | message.data[4];
                 messageHandled = onAccessorySetData(accessoryId, port, type, value);
             }
         }
         break;
-        //TODO leftover ons
+    case AccessoryCmd::Port6:
+        if (Mode::Req == static_cast<Mode>(message.mode))
+        {
+            if (4 == message.length)
+            {
+                uint8_t port = message.data[2];
+                uint8_t type = message.data[3];
+                messageHandled = onAccessoryPort6(accessoryId, port, type);
+            }
+        }
+        if (Mode::Cmd == static_cast<Mode>(message.mode))
+        {
+            if (6 == message.length)
+            {
+                uint8_t port = message.data[2];
+                uint8_t type = message.data[3];
+                uint16_t value = (message.data[5] << 8) | message.data[4];
+                messageHandled = onAccessoryPort6(accessoryId, port, type, value);
+            }
+        }
+        break;
+        // TODO leftover once
     default:
         Serial.print("Unkown accessory message:");
         Serial.println(message);
@@ -203,7 +225,7 @@ bool ZCanInterface::handleNetworkMessage(ZCanMessage &message)
             uint16_t session = (message.data[7] << 8) | message.data[6];
             messageHandled = onPing(message.networkId, masterId, type, session);
         }
-break;
+        break;
     default:
         Serial.print("Unkown info message:");
         Serial.println(message);
@@ -247,66 +269,87 @@ bool ZCanInterface::sendAccessoryPort4Ack(uint16_t accessoryId, uint8_t port, bo
     return sendMessage(message);
 }
 
-bool ZCanInterface::sendAccessoryDataEvt(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
+bool ZCanInterface::sendAccessoryDataEvt(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2)
 {
     ZCanMessage message;
-    messageAccessoryDataEvt(message, accessoryId, port, type, value);
+    messageAccessoryDataEvt(message, accessoryId, port, type, value1, value2);
     return sendMessage(message);
 }
 
-bool ZCanInterface::sendAccessoryDataAck(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
+bool ZCanInterface::sendAccessoryDataAck(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2)
 {
     ZCanMessage message;
-    messageAccessoryDataAck(message, accessoryId, port, type, value);
+    messageAccessoryDataAck(message, accessoryId, port, type, value1, value2);
     return sendMessage(message);
 }
 
-    bool ZCanInterface::requestModulePowerInfo(uint16_t sendId, uint16_t requestId)
-    {
-    ZCanMessage message;
-    messageRequestModulePowerInfo(message, sendId, requestId);
-    return sendMessage(message);
-}
-
-    bool ZCanInterface::requestModuleInfo(uint16_t sendId, uint16_t nid, uint16_t type)
-    {
-    ZCanMessage message;
-    messageRequestModuleInfo(message, sendId, nid, type);
-    return sendMessage(message);
-}
-
-    bool ZCanInterface::getModuleInfo(uint16_t sendId, uint16_t nid, uint16_t type, uint32_t info)
-    {
-    ZCanMessage message;
-    messageCmdModuleInfo(message, sendId, nid, type, info);
-    return sendMessage(message);
-}
-
-    bool ZCanInterface::sendModuleInfoEvt(uint16_t sendId, uint16_t type, uint32_t info)
-    {
-    ZCanMessage message;
-    messageModuleInfoEvt(message, sendId, type, info);
-    return sendMessage(message);
-}
-
-bool ZCanInterface::requestPing(uint16_t sendId, uint16_t requestId)
+bool ZCanInterface::requestAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type)
 {
     ZCanMessage message;
-    messageRequestPing(message, sendId, requestId);
+    messageRequestAccessoryPort6(message, accessoryId, port, type);
     return sendMessage(message);
 }
 
-bool ZCanInterface::sendPing(uint16_t sendId, uint32_t masterUid, uint16_t type, uint16_t sessionId)
+bool ZCanInterface::sendAccessoryPort6Evt(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value)
 {
     ZCanMessage message;
-    messagePing(message, sendId, masterUid, type, sessionId);
+    messageAccessoryPort6Evt(message, accessoryId, port, type, value);
     return sendMessage(message);
 }
 
-bool ZCanInterface::requestPortOpen(uint16_t id)
+bool ZCanInterface::sendAccessoryPort6Ack(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value)
 {
     ZCanMessage message;
-    messageRequestPortOpen(message, id);
+    messageAccessoryPort6Ack(message, accessoryId, port, type, value);
+    return sendMessage(message);
+}
+
+bool ZCanInterface::requestModulePowerInfo(uint16_t id)
+{
+    ZCanMessage message;
+    messageRequestModulePowerInfo(message, id);
+    return sendMessage(message);
+}
+
+bool ZCanInterface::requestModuleInfo(uint16_t id, uint16_t type)
+{
+    ZCanMessage message;
+    messageRequestModuleInfo(message, id, type);
+    return sendMessage(message);
+}
+
+bool ZCanInterface::getModuleInfo(uint16_t id, uint16_t type, uint32_t info)
+{
+    ZCanMessage message;
+    messageCmdModuleInfo(message, id, type, info);
+    return sendMessage(message);
+}
+
+bool ZCanInterface::sendModuleInfoAck(uint16_t type, uint32_t info)
+{
+    ZCanMessage message;
+    messageModuleInfoAck(message, type, info);
+    return sendMessage(message);
+}
+
+bool ZCanInterface::requestPing(uint16_t id)
+{
+    ZCanMessage message;
+    messageRequestPing(message, id);
+    return sendMessage(message);
+}
+
+bool ZCanInterface::sendPing(uint32_t masterUid, uint16_t type, uint16_t sessionId)
+{
+    ZCanMessage message;
+    messagePing(message, masterUid, type, sessionId);
+    return sendMessage(message);
+}
+
+bool ZCanInterface::requestPortOpen()
+{
+    ZCanMessage message;
+    messageRequestPortOpen(message);
     return sendMessage(message);
 }
 
@@ -317,8 +360,8 @@ void ZCanInterface::messageAccessoryStatus(ZCanMessage &message, uint16_t access
     message.clear();
     message.group = static_cast<uint8_t>(Group::Accessory);
     message.command = static_cast<uint8_t>(AccessoryCmd::Status);
-    message.mode = static_cast<uint8_t>(Mode::ACK);
-    message.networkId = accessoryId; // TODO
+    message.mode = static_cast<uint8_t>(Mode::Ack);
+    message.networkId = m_networkId;
     message.length = 0x08;
     message.data[0] = 0xFF & (accessoryId >> 8);
     message.data[1] = 0xFF & accessoryId;
@@ -335,8 +378,8 @@ void ZCanInterface::messageAccessoryMode(ZCanMessage &message, uint16_t accessor
     message.clear();
     message.group = static_cast<uint8_t>(Group::Accessory);
     message.command = static_cast<uint8_t>(AccessoryCmd::Mode);
-    message.mode = static_cast<uint8_t>(Mode::ACK);
-    message.networkId = accessoryId; // TODO
+    message.mode = static_cast<uint8_t>(Mode::Ack);
+    message.networkId = m_networkId;
     message.length = 0x04;
     message.data[0] = 0xFF & accessoryId;
     message.data[1] = 0xFF & (accessoryId >> 8);
@@ -349,8 +392,8 @@ void ZCanInterface::messageAccessoryGpio(ZCanMessage &message, uint16_t accessor
     message.clear();
     message.group = static_cast<uint8_t>(Group::Accessory);
     message.command = static_cast<uint8_t>(AccessoryCmd::Gpio);
-    message.mode = static_cast<uint8_t>(Mode::ACK);
-    message.networkId = accessoryId; // TODO
+    message.mode = static_cast<uint8_t>(Mode::Ack);
+    message.networkId = m_networkId;
     message.length = 0x08;
     message.data[0] = 0xFF & accessoryId;
     message.data[1] = 0xFF & (accessoryId >> 8);
@@ -366,9 +409,9 @@ void ZCanInterface::messageAccessoryPort4Evt(ZCanMessage &message, uint16_t acce
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Accessory);
-    message.command = static_cast<uint8_t>(AccessoryCmd::Port);
+    message.command = static_cast<uint8_t>(AccessoryCmd::Port4);
     message.mode = static_cast<uint8_t>(Mode::Evt);
-    message.networkId = accessoryId; // TODO
+    message.networkId = m_networkId;
     message.length = 0x04;
     message.data[0] = 0xFF & accessoryId;
     message.data[1] = 0xFF & (accessoryId >> 8);
@@ -380,9 +423,9 @@ void ZCanInterface::messageAccessoryPort4Ack(ZCanMessage &message, uint16_t acce
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Accessory);
-    message.command = static_cast<uint8_t>(AccessoryCmd::Port);
-    message.mode = static_cast<uint8_t>(Mode::ACK);
-    message.networkId = accessoryId; // TODO
+    message.command = static_cast<uint8_t>(AccessoryCmd::Port4);
+    message.mode = static_cast<uint8_t>(Mode::Ack);
+    message.networkId = m_networkId;
     message.length = 0x04;
     message.data[0] = 0xFF & accessoryId;
     message.data[1] = 0xFF & (accessoryId >> 8);
@@ -390,78 +433,124 @@ void ZCanInterface::messageAccessoryPort4Ack(ZCanMessage &message, uint16_t acce
     message.data[3] = value;
 }
 
-void ZCanInterface::messageAccessoryDataEvt(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
+void ZCanInterface::messageAccessoryDataEvt(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2)
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Accessory);
     message.command = static_cast<uint8_t>(AccessoryCmd::Data);
     message.mode = static_cast<uint8_t>(Mode::Evt);
-    message.networkId = accessoryId; // TODO
+    message.networkId = m_networkId;
     message.length = 0x08;
     message.data[0] = 0xFF & accessoryId;
     message.data[1] = 0xFF & (accessoryId >> 8);
     message.data[2] = port;
     message.data[3] = type;
-    message.data[4] = 0xFF & value;
-    message.data[5] = 0xFF & (value >> 8);
-    message.data[6] = 0xFF & (value >> 16);
-    message.data[7] = 0xFF & (value >> 24);
+    message.data[4] = 0xFF & value1;
+    message.data[5] = 0xFF & (value1 >> 8);
+    message.data[6] = 0xFF & value2;
+    message.data[7] = 0xFF & (value2 >> 8);
 }
 
-void ZCanInterface::messageAccessoryDataAck(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
+void ZCanInterface::messageAccessoryDataAck(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2)
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Accessory);
     message.command = static_cast<uint8_t>(AccessoryCmd::Data);
-    message.mode = static_cast<uint8_t>(Mode::ACK);
-    message.networkId = accessoryId; // TODO
+    message.mode = static_cast<uint8_t>(Mode::Ack);
+    message.networkId = m_networkId;
     message.length = 0x08;
+    message.data[0] = 0xFF & accessoryId;
+    message.data[1] = 0xFF & (accessoryId >> 8);
+    message.data[2] = port;
+    message.data[3] = type;
+    message.data[4] = 0xFF & value1;
+    message.data[5] = 0xFF & (value1 >> 8);
+    message.data[6] = 0xFF & value2;
+    message.data[7] = 0xFF & (value2 >> 8);
+}
+
+void ZCanInterface::messageRequestAccessoryPort6(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type)
+{
+    message.clear();
+    message.group = static_cast<uint8_t>(Group::Accessory);
+    message.command = static_cast<uint8_t>(AccessoryCmd::Port6);
+    message.mode = static_cast<uint8_t>(Mode::Req);
+    message.networkId = m_networkId;
+    message.length = 0x04;
+    message.data[0] = 0xFF & accessoryId;
+    message.data[1] = 0xFF & (accessoryId >> 8);
+    message.data[2] = port;
+    message.data[3] = type;
+}
+
+void ZCanInterface::messageAccessoryPort6Evt(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value)
+{
+    message.clear();
+    message.group = static_cast<uint8_t>(Group::Accessory);
+    message.command = static_cast<uint8_t>(AccessoryCmd::Port6);
+    message.mode = static_cast<uint8_t>(Mode::Evt);
+    message.networkId = m_networkId;
+    message.length = 0x06;
     message.data[0] = 0xFF & accessoryId;
     message.data[1] = 0xFF & (accessoryId >> 8);
     message.data[2] = port;
     message.data[3] = type;
     message.data[4] = 0xFF & value;
     message.data[5] = 0xFF & (value >> 8);
-    message.data[6] = 0xFF & (value >> 16);
-    message.data[7] = 0xFF & (value >> 24);
 }
 
-void ZCanInterface::messageRequestModulePowerInfo(ZCanMessage &message, uint16_t sendId, uint16_t requestId)
+void ZCanInterface::messageAccessoryPort6Ack(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value)
+{
+    message.clear();
+    message.group = static_cast<uint8_t>(Group::Accessory);
+    message.command = static_cast<uint8_t>(AccessoryCmd::Port6);
+    message.mode = static_cast<uint8_t>(Mode::Ack);
+    message.networkId = m_networkId;
+    message.length = 0x06;
+    message.data[0] = 0xFF & accessoryId;
+    message.data[1] = 0xFF & (accessoryId >> 8);
+    message.data[2] = port;
+    message.data[3] = type;
+    message.data[4] = 0xFF & value;
+    message.data[5] = 0xFF & (value >> 8);
+}
+
+void ZCanInterface::messageRequestModulePowerInfo(ZCanMessage &message, uint16_t id)
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Info);
     message.command = static_cast<uint8_t>(InfoCmd::ModulPowerInfo);
     message.mode = static_cast<uint8_t>(Mode::Req);
-    message.networkId = sendId;
+    message.networkId = m_networkId;
     message.length = 0x04;
-    message.data[0] = 0xFF & requestId;
-    message.data[1] = 0xFF & (requestId >> 8);
+    message.data[0] = 0xFF & id;
+    message.data[1] = 0xFF & (id >> 8);
 }
 
-void ZCanInterface::messageRequestModuleInfo(ZCanMessage &message, uint16_t sendId, uint16_t nid, uint16_t type)
+void ZCanInterface::messageRequestModuleInfo(ZCanMessage &message,  uint16_t id, uint16_t type)
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Info);
     message.command = static_cast<uint8_t>(InfoCmd::ModulInfo);
     message.mode = static_cast<uint8_t>(Mode::Req);
-    message.networkId = sendId;
+    message.networkId = m_networkId;
     message.length = 0x04;
-    message.data[0] = 0xFF & nid;
-    message.data[1] = 0xFF & (nid >> 8);
+    message.data[0] = 0xFF & id;
+    message.data[1] = 0xFF & (id >> 8);
     message.data[2] = 0xFF & type;
     message.data[3] = 0xFF & (type >> 8);
 }
 
-void ZCanInterface::messageCmdModuleInfo(ZCanMessage &message, uint16_t sendId, uint16_t nid, uint16_t type, uint32_t info)
+void ZCanInterface::messageCmdModuleInfo(ZCanMessage &message, uint16_t id, uint16_t type, uint32_t info)
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Info);
     message.command = static_cast<uint8_t>(InfoCmd::ModulInfo);
     message.mode = static_cast<uint8_t>(Mode::Cmd);
-    message.networkId = sendId;
+    message.networkId = m_networkId;
     message.length = 0x08;
-    message.data[0] = 0xFF & nid;
-    message.data[1] = 0xFF & (nid >> 8);
+    message.data[0] = 0xFF & id;
+    message.data[1] = 0xFF & (id >> 8);
     message.data[2] = 0xFF & type;
     message.data[3] = 0xFF & (type >> 8);
     message.data[4] = 0xFF & info;
@@ -470,13 +559,13 @@ void ZCanInterface::messageCmdModuleInfo(ZCanMessage &message, uint16_t sendId, 
     message.data[7] = 0xFF & (info >> 24);
 }
 
-void ZCanInterface::messageModuleInfoEvt(ZCanMessage &message, uint16_t sendId, uint16_t type, uint32_t info)
+void ZCanInterface::messageModuleInfoAck(ZCanMessage &message, uint16_t type, uint32_t info)
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Info);
     message.command = static_cast<uint8_t>(InfoCmd::ModulInfo);
-    message.mode = static_cast<uint8_t>(Mode::Evt);
-    message.networkId = sendId;
+    message.mode = static_cast<uint8_t>(Mode::Ack);
+    message.networkId = m_networkId;
     message.length = 0x06;
     message.data[0] = 0xFF & type;
     message.data[1] = 0xFF & (type >> 8);
@@ -486,25 +575,25 @@ void ZCanInterface::messageModuleInfoEvt(ZCanMessage &message, uint16_t sendId, 
     message.data[5] = 0xFF & (info >> 24);
 }
 
-void ZCanInterface::messageRequestPing(ZCanMessage &message, uint16_t sendId, uint16_t requestId)
+void ZCanInterface::messageRequestPing(ZCanMessage &message, uint16_t id)
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Network);
     message.command = static_cast<uint8_t>(NetworkCmd::Ping);
     message.mode = static_cast<uint8_t>(Mode::Req);
-    message.networkId = sendId;
+    message.networkId = m_networkId;
     message.length = 0x02;
-    message.data[0] = 0xFF & requestId;
-    message.data[1] = 0xFF & (requestId >> 8);
+    message.data[0] = 0xFF & id;
+    message.data[1] = 0xFF & (id >> 8);
 }
 
-void ZCanInterface::messagePing(ZCanMessage &message, uint16_t sendId, uint32_t masterUid, uint16_t type, uint16_t sessionId)
+void ZCanInterface::messagePing(ZCanMessage &message, uint32_t masterUid, uint16_t type, uint16_t sessionId)
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Network);
     message.command = static_cast<uint8_t>(NetworkCmd::Ping);
     message.mode = static_cast<uint8_t>(Mode::Evt);
-    message.networkId = sendId;
+    message.networkId = m_networkId;
     message.length = 0x08;
     message.data[0] = 0xFF & masterUid;
     message.data[1] = 0xFF & (masterUid >> 8);
@@ -516,13 +605,13 @@ void ZCanInterface::messagePing(ZCanMessage &message, uint16_t sendId, uint32_t 
     message.data[7] = 0xFF & (sessionId >> 8);
 }
 
-void ZCanInterface::messageRequestPortOpen(ZCanMessage &message, uint16_t id)
+void ZCanInterface::messageRequestPortOpen(ZCanMessage &message)
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Network);
     message.command = static_cast<uint8_t>(NetworkCmd::PortOpen);
     message.mode = static_cast<uint8_t>(Mode::Cmd);
-    message.networkId = id;
+    message.networkId = m_networkId;
     message.length = 0x0;
 }
 
