@@ -147,6 +147,12 @@ public:
         NoLowVoltage = 0x0007        // Keine +5V
     };
 
+    const uint16_t modulNidMin{0xD000};
+    const uint16_t modulNidMax{0xDFFF};
+
+    const uint16_t z21Type{0x2000};
+    const uint16_t roco10808Type{0x9201};
+
 protected:
     ZCanInterface(bool debug);
 
@@ -174,39 +180,39 @@ protected:
 
     bool handleNetworkMessage(ZCanMessage &message);
 
-    virtual bool onAccessoryStatus(uint16_t accessoryId) { return false; };
+    virtual bool onAccessoryStatus(uint16_t accessoryId);
 
-    virtual bool onAccessoryMode(uint16_t accessoryId) { return false; };
+    virtual bool onAccessoryMode(uint16_t accessoryId);
 
-    virtual bool onAccessoryGpio(uint16_t accessoryId, uint16_t type) { return false; };
+    virtual bool onAccessoryGpio(uint16_t accessoryId, uint16_t type);
 
-    virtual bool onAccessoryPort4(uint16_t accessoryId, uint8_t port) { return false; };
+    virtual bool onAccessoryPort4(uint16_t accessoryId, uint8_t port);
 
-    virtual bool onAccessoryPort4(uint16_t accessoryId, uint8_t port, uint8_t value) { return false; };
+    virtual bool onAccessoryPort4(uint16_t accessoryId, uint8_t port, uint8_t value);
 
-    virtual bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type) { return false; };
+    virtual bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type);
 
-    virtual bool onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value) { return false; };
+    virtual bool onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value);
 
-    virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type) { return false; };
+    virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type);
 
-    virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value) { return false; };
+    virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value);
 
-    virtual bool onRequestModulPowerInfo(uint16_t id, uint8_t port) { return false; };
+    virtual bool onRequestModulPowerInfo(uint16_t id, uint8_t port);
 
-    virtual bool onRequestModulInfo(uint16_t id, uint16_t type) { return false; };
+    virtual bool onRequestModulInfo(uint16_t id, uint16_t type);
 
-    virtual bool onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info) { return false; };
+    virtual bool onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info);
 
-    virtual bool onRequestModulObjectConfig(uint16_t id, uint32_t tag) { return false; };
+    virtual bool onRequestModulObjectConfig(uint16_t id, uint32_t tag);
 
-    virtual bool onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t value) { return false; };
+    virtual bool onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t value);
 
-    virtual bool onAckModulObjectConfig(uint16_t id, uint32_t tag, uint16_t value) { return false; };
+    virtual bool onAckModulObjectConfig(uint16_t id, uint32_t tag, uint16_t value);
 
-    virtual bool onRequestPing(uint16_t id) { return false; };
+    virtual bool onRequestPing(uint16_t id);
 
-    virtual bool onPing(uint16_t nid, uint32_t masterUid, uint16_t type, uint16_t sessionId) { return false; };
+    virtual bool onPing(uint16_t nid, uint32_t masterUid, uint16_t type, uint16_t sessionId);
 
     bool sendAccessoryStatus(uint16_t accessoryId, uint16_t state, uint16_t ctrlNID, uint16_t lastControlCmdINms);
 

@@ -24,17 +24,19 @@
 class FeedbackDecoder : public ZCanInterfaceObserver
 {
 public:
-    FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, bool debug);
+    FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, int buttonPin, bool debug, bool zcanDebug);
     virtual ~FeedbackDecoder();
 
     void begin();
 
     void cyclic();
 
+    void callbackAccAddrReceived(uint16_t addr);
+
+    void callbackLocoAddrReceived(uint16_t addr);
+
 protected:
     virtual void onIdenticalNetworkId() override;
-
-    virtual bool onAccessoryStatus(uint16_t accessoryId) override;
 
     virtual bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type) override;
 
@@ -56,17 +58,17 @@ protected:
 
     bool sendMessage(ZCanMessage &message) override;
 
-    NmraDcc m_dcc;
-    DCC_MSG m_dccPacket;
+    bool m_debug;
 
-    uint8_t m_dccPin{2};
-
-    const uint16_t nidMin{0xD000};
-    const uint16_t nidMax{0xDFFF};
-
-    uint8_t m_buttonPin{3};
+    uint8_t m_buttonPin;
 
     uint16_t m_modulId;
+
+    unsigned long m_idPrgStartTimeINms;
+
+    bool m_idPrgRunning;
+
+    unsigned long m_idPrgIntervalINms;
 
     unsigned long m_lastCanCmdSendINms;
 
@@ -78,7 +80,7 @@ protected:
 
     uint16_t m_sessionId;
 
-    uint16_t m_modulType{0x9201};
+    uint16_t m_modulType{roco10808Type};
 
     // adress is 0x8000 up tp 0xC000
     bool notifyLocoInBlock(uint8_t port, uint16_t adress1, uint16_t adress2, uint16_t adress3, uint16_t adress4);

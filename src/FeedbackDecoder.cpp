@@ -16,12 +16,17 @@
 
 #include "FeedbackDecoder.h"
 
-FeedbackDecoder::FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, bool debug)
-    : ZCanInterfaceObserver(debug),
+FeedbackDecoder::FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, int buttonPin, bool debug, bool zcanDebug)
+    : ZCanInterfaceObserver(zcanDebug),
+      m_debug(debug),
+      m_buttonPin(buttonPin),
       m_modulId(0x0),
+      m_idPrgStartTimeINms(0),
+      m_idPrgRunning(false),
       m_lastCanCmdSendINms(0),
       m_pingJitterINms(random(0, 100)),
       m_pingIntervalINms(9990 - m_pingJitterINms),
+      m_idPrgIntervalINms(60000), // 1 min
       m_masterId(0x0),
       m_sessionId(0x0),
       m_namespaceFeedbackModul{namespaceFeedbackModul},
@@ -56,7 +61,7 @@ void FeedbackDecoder::begin()
             Serial.println(F("Wrong size of modulConfig"));
             Serial.println(F("Write default config"));
 
-            m_modulConfig.networkId = nidMin + random(1, 0xFFF);
+            m_modulConfig.networkId = modulNidMin + random(1, (modulNidMax - modulNidMin));
             m_modulConfig.modulAdress = 0x00;
             m_modulConfig.firmwareVersion = 0x03010014; // 3.1.20
             m_modulConfig.buildDate = 0x07E60923;       // 23.09.2022
@@ -76,14 +81,9 @@ void FeedbackDecoder::begin()
     }
     m_networkId = m_modulConfig.networkId;
     m_modulId = m_modulConfig.modulAdress;
-    Serial.printf("Modul: NetworkId %x MA %x CH2 %x\n",
-                  m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
+    Serial.printf("%s: NetworkId %x MA %x CH2 %x\n", m_namespaceFeedbackModul.c_str(), m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
 
     ZCanInterfaceObserver::begin();
-
-    pinMode(m_dccPin, OUTPUT);
-    m_dcc.pin(m_dccPin, 0);
-    m_dcc.init(MAN_ID_DIY, 10, CV29_ACCESSORY_DECODER | CV29_OUTPUT_ADDRESS_MODE, 0);
 
     trackData[0].adress[0] = 0x8022;
     trackData[2].adress[0] = 0x0023;
@@ -96,6 +96,8 @@ void FeedbackDecoder::begin()
     trackData[6].state = true;
     trackData[7].state = true;
 
+    pinMode(m_buttonPin, INPUT_PULLUP);
+
     // Wait random time before starting logging to Z21
     delay(random(1, 20));
 
@@ -105,24 +107,40 @@ void FeedbackDecoder::begin()
 
 void FeedbackDecoder::cyclic()
 {
-
-    m_dcc.process();
     unsigned long currentTimeINms{millis()};
     if ((m_lastCanCmdSendINms + m_pingIntervalINms) < currentTimeINms)
     {
         sendPing(m_masterId, m_modulType, m_sessionId);
     }
+    if (m_idPrgRunning)
+    {
+        if ((m_idPrgStartTimeINms + m_idPrgIntervalINms) < currentTimeINms)
+        {
+            m_idPrgRunning = false;
+        }
+    }
+    if (!digitalRead(m_buttonPin))
+    {
+        // button pressed
+        m_idPrgRunning = true;
+        m_idPrgStartTimeINms = currentTimeINms;
+    }
 }
 
-void notifyDccMsg(DCC_MSG *Msg)
+void FeedbackDecoder::callbackAccAddrReceived(uint16_t addr)
 {
-    Serial.print("notifyDccMsg: ");
-    for (uint8_t i = 0; i < Msg->Size; i++)
+    if (m_idPrgRunning)
     {
-        Serial.print(Msg->Data[i], HEX);
-        Serial.write(' ');
+        m_modulId = addr;
+        m_modulConfig.modulAdress = m_modulId;
+        m_idPrgRunning = false;
+        saveConfig();
     }
-    Serial.println();
+}
+
+void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
+{
+    // start detection of Railcom
 }
 
 bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, uint16_t adress1, uint16_t adress2, uint16_t adress3, uint16_t adress4)
@@ -141,24 +159,9 @@ bool FeedbackDecoder::notifyBlockOccupied(uint8_t port, uint8_t type, bool occup
 void FeedbackDecoder::onIdenticalNetworkId()
 {
     // received own network id. Generate new random network id
-    m_modulConfig.networkId = nidMin + random(1, 0xFFF);
+    m_modulConfig.networkId = modulNidMin + random(1, (modulNidMax - modulNidMin));
     saveConfig();
     sendPing(m_masterId, m_modulType, m_sessionId);
-}
-
-bool FeedbackDecoder::onAccessoryStatus(uint16_t accessoryId)
-{ // TODO
-    if (accessoryId == m_modulId)
-    {
-        // current CtrlId needed and last time of command
-        sendAccessoryStatus(accessoryId, static_cast<uint16_t>(AccessoryErrorCode::NoError), 0, 0xFFFF);
-    }
-    /*
-    void messageAccessoryMode(ZCanMessage &message, uint16_t accessoryId, mx9Present{1});
-
-    void messageAccessoryGpio(ZCanMessage &message, uint16_t accessoryId, 0, Belegtstatus von Gleisen 1-16 uint16_t (oberen 16 bit der 32bit));
-  */
-    return false;
 }
 
 bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type)
@@ -174,7 +177,7 @@ bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_
 bool FeedbackDecoder::onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
 {
     bool result{false};
-    if ((accessoryId == m_modulId) || ((accessoryId & 0xF000) == nidMin))
+    if ((accessoryId == m_modulId) || ((accessoryId & 0xF000) == modulNidMin))
     {
         if (port < trackData.size())
         {
@@ -194,7 +197,7 @@ bool FeedbackDecoder::onAccessorySetData(uint16_t accessoryId, uint8_t port, uin
 bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type)
 {
     bool result{false};
-    if ((accessoryId == m_modulId) || ((accessoryId & 0xF000) == nidMin))
+    if ((accessoryId == m_modulId) || ((accessoryId & 0xF000) == modulNidMin))
     {
         if (0x1 == type)
         {
@@ -377,7 +380,7 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
 bool FeedbackDecoder::onRequestPing(uint16_t id)
 {
     bool result{false};
-    if (id == nidMin) // TODO
+    if (id == modulNidMin) // TODO
     {
         result = sendPing(m_masterId, m_modulType, m_sessionId);
     }
@@ -388,7 +391,10 @@ bool FeedbackDecoder::onPing(uint16_t id, uint32_t masterUid, uint16_t type, uin
 {
     if ((masterUid != m_masterId) && (0x2000 == (type & 0xFF00)))
     {
-        Serial.printf("New master %x", masterUid);
+        if (m_debug)
+        {
+            Serial.printf("New master %x", masterUid);
+        }
         m_masterId = masterUid;
         m_sessionId = sessionId;
         sendPing(m_masterId, m_modulType, m_sessionId);

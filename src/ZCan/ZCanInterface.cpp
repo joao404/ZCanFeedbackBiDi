@@ -52,8 +52,11 @@ void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
     // received message with own network id. This should normally not happen
     if (message.networkId == m_networkId)
     {
-        Serial.print("Message with identical network id ");
-        Serial.println(message);
+        if (m_debug)
+        {
+            Serial.print("Message with identical network id ");
+            Serial.println(message);
+        }
         onIdenticalNetworkId();
     }
 
@@ -77,14 +80,20 @@ void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
         break;
 
     default:
-        Serial.print("Unsupported message");
-        Serial.println(message);
+        if (m_debug)
+        {
+            Serial.print("Unsupported message");
+            Serial.println(message);
+        }
         break;
     }
     if (!messageHandled)
     {
-        Serial.print("Unsupported message");
-        Serial.println(message);
+        if (m_debug)
+        {
+            Serial.print("Unsupported message");
+            Serial.println(message);
+        }
     }
 }
 
@@ -176,8 +185,11 @@ bool ZCanInterface::handleAccessoryMessage(ZCanMessage &message)
         break;
         // TODO leftover once
     default:
-        Serial.print("Unkown accessory message:");
-        Serial.println(message);
+        if (m_debug)
+        {
+            Serial.print("Unkown accessory message:");
+            Serial.println(message);
+        }
         break;
     }
     return messageHandled;
@@ -233,8 +245,11 @@ bool ZCanInterface::handleInfoMessage(ZCanMessage &message)
         }
         break;
     default:
-        Serial.print("Unkown info message:");
-        Serial.println(message);
+        if (m_debug)
+        {
+            Serial.print("Unkown info message:");
+            Serial.println(message);
+        }
         break;
     }
     return messageHandled;
@@ -260,11 +275,167 @@ bool ZCanInterface::handleNetworkMessage(ZCanMessage &message)
         }
         break;
     default:
-        Serial.print("Unkown info message:");
-        Serial.println(message);
+        if (m_debug)
+        {
+            Serial.print("Unkown info message:");
+            Serial.println(message);
+        }
         break;
     }
     return messageHandled;
+}
+
+bool ZCanInterface::onAccessoryStatus(uint16_t accessoryId)
+{
+    if (m_debug)
+    {
+        Serial.println("onAccessoryStatus");
+    }
+    return false;
+}
+
+bool ZCanInterface::onAccessoryMode(uint16_t accessoryId)
+{
+    if (m_debug)
+    {
+        Serial.println("onAccessoryMode");
+    }
+    return false;
+}
+
+bool ZCanInterface::onAccessoryGpio(uint16_t accessoryId, uint16_t type)
+{
+    if (m_debug)
+    {
+        Serial.println("onAccessoryGpio");
+    }
+    return false;
+}
+
+bool ZCanInterface::onAccessoryPort4(uint16_t accessoryId, uint8_t port)
+{
+    if (m_debug)
+    {
+        Serial.println("onAccessoryPort4Req");
+    }
+    return false;
+}
+
+bool ZCanInterface::onAccessoryPort4(uint16_t accessoryId, uint8_t port, uint8_t value)
+{
+    if (m_debug)
+    {
+        Serial.println("onAccessoryPort4");
+    }
+    return false;
+}
+
+bool ZCanInterface::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type)
+{
+    if (m_debug)
+    {
+        Serial.println("onAccessoryData");
+    }
+    return false;
+}
+
+bool ZCanInterface::onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
+{
+    if (m_debug)
+    {
+        Serial.println("onAccessorySetData");
+    }
+    return false;
+}
+
+bool ZCanInterface::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type)
+{
+    if (m_debug)
+    {
+        Serial.println("onAccessoryPort6Req");
+    }
+    return false;
+}
+
+bool ZCanInterface::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value)
+{
+    if (m_debug)
+    {
+        Serial.println("onAccessoryPort6");
+    }
+    return false;
+}
+
+bool ZCanInterface::onRequestModulPowerInfo(uint16_t id, uint8_t port)
+{
+    if (m_debug)
+    {
+        Serial.println("onRequestModulPowerInfo");
+    }
+    return false;
+}
+
+bool ZCanInterface::onRequestModulInfo(uint16_t id, uint16_t type)
+{
+    if (m_debug)
+    {
+        Serial.println("onRequestModulInfo");
+    }
+    return false;
+}
+
+bool ZCanInterface::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
+{
+    if (m_debug)
+    {
+        Serial.println("onCmdModulInfo");
+    }
+    return false;
+}
+
+bool ZCanInterface::onRequestModulObjectConfig(uint16_t id, uint32_t tag)
+{
+    if (m_debug)
+    {
+        Serial.println("onRequestModulObjectConfig");
+    }
+    return false;
+}
+
+bool ZCanInterface::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t value)
+{
+    if (m_debug)
+    {
+        Serial.println("onCmdModulObjectConfig");
+    }
+    return false;
+}
+
+bool ZCanInterface::onAckModulObjectConfig(uint16_t id, uint32_t tag, uint16_t value)
+{
+    if (m_debug)
+    {
+        Serial.println("onAckModulObjectConfig");
+    }
+    return false;
+}
+
+bool ZCanInterface::onRequestPing(uint16_t id)
+{
+    if (m_debug)
+    {
+        Serial.println("onRequestPing");
+    }
+    return false;
+}
+
+bool ZCanInterface::onPing(uint16_t nid, uint32_t masterUid, uint16_t type, uint16_t sessionId)
+{
+    if (m_debug)
+    {
+        Serial.println("onPing");
+    }
+    return false;
 }
 
 bool ZCanInterface::sendAccessoryStatus(uint16_t accessoryId, uint16_t state, uint16_t ctrlNID, uint16_t lastControlCmdINms)
