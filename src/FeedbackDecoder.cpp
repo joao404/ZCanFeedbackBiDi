@@ -85,15 +85,16 @@ void FeedbackDecoder::begin()
     m_dcc.pin(m_dccPin, 0);
     m_dcc.init(MAN_ID_DIY, 10, CV29_ACCESSORY_DECODER | CV29_OUTPUT_ADDRESS_MODE, 0);
 
-    trackAdress[0] = 0x8022;
-    trackAdress[2] = 0x8023;
-    trackAdress[4] = 0x8024;
-    trackAdress[7] = 0x8025;
+    trackData[0].adress[0] = 0x8022;
+    trackData[2].adress[0] = 0x0023;
+    trackData[4].adress[0] = 0x8024;
+    trackData[7].adress[0] = 0x8025;
 
-    trackState[0] = true;
-    trackState[2] = true;
-    trackState[4] = true;
-    trackState[7] = true;
+    trackData[0].state = true;
+    trackData[2].state = true;
+    trackData[4].state = true;
+    trackData[6].state = true;
+    trackData[7].state = true;
 
     // Wait random time before starting logging to Z21
     delay(random(1, 20));
@@ -146,7 +147,7 @@ void FeedbackDecoder::onIdenticalNetworkId()
 }
 
 bool FeedbackDecoder::onAccessoryStatus(uint16_t accessoryId)
-{//TODO
+{ // TODO
     if (accessoryId == m_modulId)
     {
         // current CtrlId needed and last time of command
@@ -175,11 +176,15 @@ bool FeedbackDecoder::onAccessorySetData(uint16_t accessoryId, uint8_t port, uin
     bool result{false};
     if ((accessoryId == m_modulId) || ((accessoryId & 0xF000) == nidMin))
     {
-        if ((0x11 == type) || (0x12 == type))
+        if (port < trackData.size())
         {
-            if (port < trackState.size())
+            if (0x11 == type)
             {
-                result = sendAccessoryDataAck(m_modulId, port, type, trackAdress[port], 0);
+                result = sendAccessoryDataAck(m_modulId, port, type, trackData[port].adress[0], trackData[port].adress[1]);
+            }
+            else if (0x12 == type)
+            {
+                result = sendAccessoryDataAck(m_modulId, port, type, trackData[port].adress[2], trackData[port].adress[3]);
             }
         }
     }
@@ -193,9 +198,9 @@ bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8
     {
         if (0x1 == type)
         {
-            if (port < trackState.size())
+            if (port < trackData.size())
             {
-                result = sendAccessoryDataAck(m_modulId, port, type, trackState[port] ? 0x1100 : 0x0100, 0);
+                result = sendAccessoryDataAck(m_modulId, port, type, trackData[port].state ? 0x1100 : 0x0100, 0);
             }
         }
     }

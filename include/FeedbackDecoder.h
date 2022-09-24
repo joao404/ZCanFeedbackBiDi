@@ -85,8 +85,13 @@ protected:
 
     bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
 
-    std::array<bool, 8> trackState;
-    std::array<uint16_t, 8> trackAdress; 
+    typedef struct
+    {
+        bool state;
+        std::array<uint16_t, 4> adress;
+    } TrackData;
+
+    std::array<TrackData, 8> trackData; 
 
 private:
     typedef struct
