@@ -109,15 +109,16 @@ public:
         Status = 0x00, // Jedes Steuersystem (Fahrpult, PC-Software) sollte den Zubehörstatus immer als erste Initialabfrage ausführen. Insbesondere für die MX8 und MX9 Module.
         Mode = 0x01,   // Dieses Datagramm dient der Abfrage und der Einstellung der Zubehörbetriebsart.
         Gpio = 0x02,   // Diese Datagramme dienen der effizienten Statusabfrage von simplen Ein-/Ausgängen. Es werden je Gruppe bis zu 32 Ein-/Ausgangszustände übertragen.
-        Port4 = 0x04,   // Wenn M = 0b00, DLC = 3, dann wird der Zustand des Ein/Ausganges (Port) vom Zubehör NID abgefragt.Durch M = 0b01, DLC = 4 wird der Ausgang des Zubehörs (NID) auf den angegeben Wert eingestellt.
-        Data = 0x05,    // Mit diesen Datagrammen können Objektdaten abgefragt und gesetzt werden.
+        Port4 = 0x04,  // Wenn M = 0b00, DLC = 3, dann wird der Zustand des Ein/Ausganges (Port) vom Zubehör NID abgefragt.Durch M = 0b01, DLC = 4 wird der Ausgang des Zubehörs (NID) auf den angegeben Wert eingestellt.
+        Data = 0x05,   // Mit diesen Datagrammen können Objektdaten abgefragt und gesetzt werden.
         Port6 = 0x06
     };
 
     enum class InfoCmd : uint8_t
     {
         ModulPowerInfo = 0x00,
-        ModulInfo = 0x08
+        ModulInfo = 0x08,
+        ModulObjectConfig = 0x0A
     };
 
     enum class NetworkCmd : uint8_t
@@ -147,13 +148,13 @@ public:
     };
 
 protected:
-    ZCanInterface(uint16_t networkId, bool debug);
+    ZCanInterface(bool debug);
 
     virtual ~ZCanInterface();
 
     bool m_debug;
 
-    bool m_networkId;
+    uint16_t m_networkId;
 
     virtual void begin();
 
@@ -162,6 +163,8 @@ protected:
     virtual bool receiveMessage(ZCanMessage &message) = 0;
 
     virtual void end() = 0;
+
+    virtual void onIdenticalNetworkId() = 0;
 
     void handleReceivedMessage(ZCanMessage &message);
 
@@ -195,6 +198,12 @@ protected:
 
     virtual bool onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info) { return false; };
 
+    virtual bool onRequestModulObjectConfig(uint16_t id, uint32_t tag) { return false; };
+
+    virtual bool onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t value) { return false; };
+
+    virtual bool onAckModulObjectConfig(uint16_t id, uint32_t tag, uint16_t value) { return false; };
+
     virtual bool onRequestPing(uint16_t id) { return false; };
 
     virtual bool onPing(uint16_t nid, uint32_t masterUid, uint16_t type, uint16_t sessionId) { return false; };
@@ -219,6 +228,9 @@ protected:
     bool requestModuleInfo(uint16_t nid, uint16_t type);
     bool getModuleInfo(uint16_t nid, uint16_t type, uint32_t info);
     bool sendModuleInfoAck(uint16_t type, uint32_t info);
+    bool sendModuleInfoAck(uint16_t id, uint16_t type, uint32_t info);
+
+    bool sendModuleObjectConfigAck(uint16_t id, uint32_t tag, uint16_t value);
 
     bool requestPing(uint16_t id);
     bool sendPing(uint32_t masterUid, uint16_t type, uint16_t sessionId);
@@ -246,6 +258,9 @@ private:
     void messageRequestModuleInfo(ZCanMessage &message, uint16_t id, uint16_t type);
     void messageCmdModuleInfo(ZCanMessage &message, uint16_t id, uint16_t type, uint32_t info);
     void messageModuleInfoAck(ZCanMessage &message, uint16_t type, uint32_t info);
+    void messageModuleInfoAck(ZCanMessage &message, uint16_t id, uint16_t type, uint32_t info);
+
+    void messageModuleObjectConfigAck(ZCanMessage &message, uint16_t id, uint32_t tag, uint16_t value);
 
     void messageRequestPing(ZCanMessage &message, uint16_t id);
     void messagePing(ZCanMessage &message, uint32_t masterUid, uint16_t type, uint16_t sessionId);

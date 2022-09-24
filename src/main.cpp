@@ -24,11 +24,13 @@
 twai_timing_config_t timingConfig = TWAI_TIMING_CONFIG_125KBITS();
 std::shared_ptr<CanInterfaceEsp32> canInterface = std::make_shared<CanInterfaceEsp32>(timingConfig, GPIO_NUM_4, GPIO_NUM_5);
 
-FeedbackDecoder feedbackDecoder(true);
+// I will need in the end two of those moduls to handle each of the 8 inputs
+FeedbackDecoder feedbackDecoder("feedbackModul1", "modulConfig", true);
 
 
 void setup()
 {
+  Serial.begin(230000);
 
   if (nullptr != canInterface.get())
   {

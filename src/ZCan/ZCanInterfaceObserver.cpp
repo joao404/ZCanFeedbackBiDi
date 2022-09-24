@@ -16,8 +16,8 @@
 
 #include "ZCan/ZCanInterfaceObserver.h"
 
-ZCanInterfaceObserver::ZCanInterfaceObserver(uint16_t networkId, bool debug)
-    : ZCanInterface(networkId, debug)
+ZCanInterfaceObserver::ZCanInterfaceObserver(bool debug)
+    : ZCanInterface(debug)
 {
 }
 
@@ -90,7 +90,7 @@ bool ZCanInterfaceObserver::sendMessage(ZCanMessage &message)
   if (m_debug)
   {
     Serial.print("<== ");
-    Serial.print(tx_frame.identifier, HEX);
+    Serial.print(txFrame.identifier, HEX);
     Serial.print(" ");
     Serial.println(message);
   }
