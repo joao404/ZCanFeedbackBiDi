@@ -14,6 +14,32 @@
  * LICENSE file for more details.
  */
 
+#define BUILDTM_YEAR (\
+    __DATE__[7] == '?' ? 1900 \
+    : (((__DATE__[7] - '0') * 1000 ) \
+    + (__DATE__[8] - '0') * 100 \
+    + (__DATE__[9] - '0') * 10 \
+    + __DATE__[10] - '0'))
+
+#define BUILDTM_MONTH (\
+    __DATE__ [2] == '?' ? 1 \
+    : __DATE__ [2] == 'n' ? (__DATE__ [1] == 'a' ? 1 : 6) \
+    : __DATE__ [2] == 'b' ? 2 \
+    : __DATE__ [2] == 'r' ? (__DATE__ [0] == 'M' ? 3 : 4) \
+    : __DATE__ [2] == 'y' ? 5 \
+    : __DATE__ [2] == 'l' ? 7 \
+    : __DATE__ [2] == 'g' ? 8 \
+    : __DATE__ [2] == 'p' ? 9 \
+    : __DATE__ [2] == 't' ? 10 \
+    : __DATE__ [2] == 'v' ? 11 \
+    : 12)
+
+#define BUILDTM_DAY (\
+    __DATE__[4] == '?' ? 1 \
+    : ((__DATE__[4] == ' ' ? 0 : \
+    ((__DATE__[4] - '0') * 10)) + __DATE__[5] - '0'))
+
+
 #include "FeedbackDecoder.h"
 
 FeedbackDecoder::FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, int buttonPin, bool debug, bool zcanDebug)
@@ -29,6 +55,9 @@ FeedbackDecoder::FeedbackDecoder(std::string namespaceFeedbackModul, std::string
       m_idPrgIntervalINms(60000), // 1 min
       m_masterId(0x0),
       m_sessionId(0x0),
+      m_firmwareVersion(0x05010014), // 5.1.20
+      m_buildDate(0x07E60917),       // 23.09.2022
+      m_hardwareVersion(0x05010001), // 5.1.1
       m_namespaceFeedbackModul{namespaceFeedbackModul},
       m_keyModulConfig{keyModulConfig}
 {
@@ -63,10 +92,7 @@ void FeedbackDecoder::begin()
 
             m_modulConfig.networkId = modulNidMin + random(1, (modulNidMax - modulNidMin));
             m_modulConfig.modulAdress = 0x00;
-            m_modulConfig.firmwareVersion = 0x03010014; // 3.1.20
-            m_modulConfig.buildDate = 0x07E60923;       // 23.09.2022
-            m_modulConfig.hardwareVersion = 0x03010001; // 3.1.1
-                                                        // for (auto finding = m_modulConfig.trackConfig.begin(); finding != m_modulConfig.trackConfig.end(); ++finding)
+            // for (auto finding = m_modulConfig.trackConfig.begin(); finding != m_modulConfig.trackConfig.end(); ++finding)
             m_modulConfig.trackConfig.trackSetCurrentINmA = 10;
             m_modulConfig.trackConfig.trackFreeToSetTimeINms = 0;
             m_modulConfig.trackConfig.trackSetToFreeTimeINms = 1000;
@@ -81,13 +107,18 @@ void FeedbackDecoder::begin()
     }
     m_networkId = m_modulConfig.networkId;
     m_modulId = m_modulConfig.modulAdress;
+    uint32_t day = BUILDTM_DAY;
+    uint32_t month = BUILDTM_MONTH;
+    uint32_t year = BUILDTM_YEAR;
+    m_buildDate = (year << 16) | (month << 8) | day;
+    Serial.printf("SW Version: 0x%08X, build date: 0x%08X\n", m_firmwareVersion, m_buildDate);
     Serial.printf("%s: NetworkId %x MA %x CH2 %x\n", m_namespaceFeedbackModul.c_str(), m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
 
     ZCanInterfaceObserver::begin();
 
     trackData[0].adress[0] = 0x8022;
     trackData[2].adress[0] = 0x0023;
-    trackData[4].adress[0] = 0x8024;
+    trackData[4].adress[0] = 0xC024;
     trackData[7].adress[0] = 0x8025;
 
     trackData[0].state = true;
@@ -103,6 +134,8 @@ void FeedbackDecoder::begin()
 
     // Send first ping
     sendPing(m_masterId, m_modulType, m_sessionId);
+
+    Serial.printf("%s finished config\n", m_namespaceFeedbackModul.c_str());
 }
 
 void FeedbackDecoder::cyclic()
@@ -166,16 +199,12 @@ void FeedbackDecoder::onIdenticalNetworkId()
 
 bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type)
 {
-    bool result{false};
-    if (accessoryId == m_modulId)
-    {
-        result = sendAccessoryDataAck(m_modulId, port, type, 0x8022, 0);
-    }
-    return result;
-}
-
-bool FeedbackDecoder::onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
-{
+    // bool result{false};
+    // if (accessoryId == m_modulId)
+    // {
+    //     result = sendAccessoryDataAck(m_modulId, port, type, 0x8022, 0);
+    // }
+    // return result;
     bool result{false};
     if ((accessoryId == m_modulId) || ((accessoryId & 0xF000) == modulNidMin))
     {
@@ -183,10 +212,13 @@ bool FeedbackDecoder::onAccessorySetData(uint16_t accessoryId, uint8_t port, uin
         {
             if (0x11 == type)
             {
+
+                Serial.println("onAccessoryData");
                 result = sendAccessoryDataAck(m_modulId, port, type, trackData[port].adress[0], trackData[port].adress[1]);
             }
             else if (0x12 == type)
             {
+                Serial.println("onAccessoryData");
                 result = sendAccessoryDataAck(m_modulId, port, type, trackData[port].adress[2], trackData[port].adress[3]);
             }
         }
@@ -204,6 +236,7 @@ bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8
             if (port < trackData.size())
             {
                 result = sendAccessoryDataAck(m_modulId, port, type, trackData[port].state ? 0x1100 : 0x0100, 0);
+                Serial.println("onAccessoryPort6");
             }
         }
     }
@@ -214,20 +247,22 @@ bool FeedbackDecoder::onRequestModulInfo(uint16_t id, uint16_t type)
 {
     //__TIME__
     //__DATE__
+
     bool result{false};
     if (id == m_networkId)
     {
+        Serial.println("onRequestModulInfo");
         result = true;
         switch (type)
         {
         case 1: // HwVersion
-            sendModuleInfoAck(m_modulId, type, m_modulConfig.hardwareVersion);
+            sendModuleInfoAck(m_modulId, type, m_hardwareVersion);
             break;
         case 2: // SwVersion
-            sendModuleInfoAck(m_modulId, type, m_modulConfig.firmwareVersion);
+            sendModuleInfoAck(m_modulId, type, m_firmwareVersion);
             break;
         case 3: // Build Date
-            sendModuleInfoAck(m_modulId, type, m_modulConfig.buildDate);
+            sendModuleInfoAck(m_modulId, type, m_buildDate);
             break;
         case 4:
             sendModuleInfoAck(m_modulId, type, 0x00010200);
@@ -249,10 +284,10 @@ bool FeedbackDecoder::onRequestModulInfo(uint16_t id, uint16_t type)
 
 bool FeedbackDecoder::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
 {
-
     bool result{false};
     if (id == m_networkId)
     {
+        Serial.println("onCmdModulInfo");
         result = true;
         switch (type)
         {
@@ -279,6 +314,7 @@ bool FeedbackDecoder::onRequestModulObjectConfig(uint16_t id, uint32_t tag)
     bool result{false};
     if (id == m_networkId)
     {
+        Serial.println("onRequestModulObjectConfig");
         uint16_t value{0};
         switch (tag)
         {
@@ -348,29 +384,36 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
         {
         case 0x00221001:
             m_modulConfig.sendChannel2Data = ((value & 0x0010) == 0x0010);
+            Serial.printf("Write Send Channel 2 %u\n", m_modulConfig.sendChannel2Data);
             saveConfig();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         case 0x00401001:
             m_modulConfig.trackConfig.trackSetCurrentINmA = value;
+            Serial.printf("Write SetCurrent %u\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
             saveConfig();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         case 0x00501001:
             m_modulConfig.trackConfig.trackFreeToSetTimeINms = value;
+            Serial.printf("Write FreeToSetTime %u\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
             saveConfig();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         case 0x00511001:
             m_modulConfig.trackConfig.trackSetToFreeTimeINms = value;
+            Serial.printf("Write SetToFreeTime %u\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
             saveConfig();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         default:
+            // all other values are handled
+            Serial.printf("Handle tag %x\n", tag);
+            result = true;
             break;
         }
     }

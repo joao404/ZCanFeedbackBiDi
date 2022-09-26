@@ -24,8 +24,8 @@ twai_timing_config_t timingConfig = TWAI_TIMING_CONFIG_125KBITS();
 std::shared_ptr<CanInterfaceEsp32> canInterface = std::make_shared<CanInterfaceEsp32>(timingConfig, GPIO_NUM_4, GPIO_NUM_5);
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
-FeedbackDecoder feedbackDecoder1("feedbackModul1", "modulConfig", 3, true, true);
-FeedbackDecoder feedbackDecoder2("feedbackModul2", "modulConfig", 6, true, true);
+FeedbackDecoder feedbackDecoder1("feedbackModul1", "modulConfig", 13, true, true);
+FeedbackDecoder feedbackDecoder2("feedbackModul2", "modulConfig", 14, true, true);
 
 NmraDcc m_dcc;
 DCC_MSG m_dccPacket;

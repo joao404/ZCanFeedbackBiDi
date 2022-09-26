@@ -40,14 +40,12 @@ protected:
 
     virtual bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type) override;
 
-    virtual bool onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value) override;
-
     virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type) override;
 
     virtual bool onRequestModulInfo(uint16_t id, uint16_t type) override;
 
     virtual bool onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info) override;
-    
+
     virtual bool onRequestModulObjectConfig(uint16_t id, uint32_t tag) override;
 
     virtual bool onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t value) override;
@@ -93,7 +91,7 @@ protected:
         std::array<uint16_t, 4> adress;
     } TrackData;
 
-    std::array<TrackData, 8> trackData; 
+    std::array<TrackData, 8> trackData;
 
 private:
     typedef struct
@@ -107,15 +105,16 @@ private:
     {
         uint16_t networkId;
         uint8_t modulAdress;
-        uint32_t firmwareVersion;
-        uint32_t buildDate;
-        uint32_t hardwareVersion;
         bool sendChannel2Data;
-        //std::array<TrackConfig, 8> trackConfig;
+        // std::array<TrackConfig, 8> trackConfig;
         TrackConfig trackConfig;
     } ModulConfig;
 
     ModulConfig m_modulConfig;
+
+        uint32_t m_firmwareVersion;
+    uint32_t m_buildDate;
+    uint32_t m_hardwareVersion;
 
     Preferences m_preferences;
 

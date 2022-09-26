@@ -82,7 +82,7 @@ void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
     default:
         if (m_debug)
         {
-            Serial.print("Unsupported message");
+            Serial.print("Unsupported message ");
             Serial.println(message);
         }
         break;
@@ -91,7 +91,7 @@ void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
     {
         if (m_debug)
         {
-            Serial.print("Unsupported message");
+            Serial.print("Unsupported message ");
             Serial.println(message);
         }
     }
