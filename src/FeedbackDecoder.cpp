@@ -282,6 +282,24 @@ bool FeedbackDecoder::onRequestModulInfo(uint16_t id, uint16_t type)
     return result;
 }
 
+bool FeedbackDecoder::onModulPowerInfoEvt(uint16_t nid, uint8_t port, uint16_t status, uint16_t voltageINmV, uint16_t currentINmA)
+{
+    if (m_debug)
+    {
+        Serial.println("onModulPowerInfoEvt");
+    }
+    return true;
+}
+
+bool FeedbackDecoder::onModulPowerInfoAck(uint16_t nid, uint8_t port, uint16_t status, uint16_t voltageINmV, uint16_t currentINmA)
+{
+    if (m_debug)
+    {
+        Serial.println("onModulPowerInfoAck");
+    }
+    return true;
+}
+
 bool FeedbackDecoder::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
 {
     bool result{false};

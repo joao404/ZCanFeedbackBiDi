@@ -44,6 +44,10 @@ protected:
 
     virtual bool onRequestModulInfo(uint16_t id, uint16_t type) override;
 
+    virtual bool onModulPowerInfoEvt(uint16_t nid, uint8_t port, uint16_t status, uint16_t voltageINmV, uint16_t currentINmA) override;
+
+    virtual bool onModulPowerInfoAck(uint16_t nid, uint8_t port, uint16_t status, uint16_t voltageINmV, uint16_t currentINmA) override;
+
     virtual bool onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info) override;
 
     virtual bool onRequestModulObjectConfig(uint16_t id, uint32_t tag) override;
@@ -112,7 +116,7 @@ private:
 
     ModulConfig m_modulConfig;
 
-        uint32_t m_firmwareVersion;
+    uint32_t m_firmwareVersion;
     uint32_t m_buildDate;
     uint32_t m_hardwareVersion;
 

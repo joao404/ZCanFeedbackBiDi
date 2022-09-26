@@ -206,6 +206,24 @@ bool ZCanInterface::handleInfoMessage(ZCanMessage &message)
             uint16_t id = (message.data[1] << 8) | message.data[0];
             messageHandled = onRequestModulPowerInfo(id, message.data[2]);
         }
+        else if ((8 == message.length) && (Mode::Evt == static_cast<Mode>(message.mode)))
+        {
+            uint16_t nid = message.networkId;
+            uint8_t port = message.data[0];
+            uint16_t status = (message.data[3] << 8) | message.data[2];
+            uint16_t voltageINmV = (message.data[5] << 8) | message.data[4];
+            uint16_t currentINmA = (message.data[7] << 8) | message.data[6];
+            messageHandled = onModulPowerInfoEvt(nid, port, status, voltageINmV, currentINmA);
+        }
+        else if ((8 == message.length) && (Mode::Ack == static_cast<Mode>(message.mode)))
+        {
+            uint16_t nid = message.networkId;
+            uint8_t port = message.data[0];
+            uint16_t status = (message.data[3] << 8) | message.data[2];
+            uint16_t voltageINmV = (message.data[5] << 8) | message.data[4];
+            uint16_t currentINmA = (message.data[7] << 8) | message.data[6];
+            messageHandled = onModulPowerInfoAck(nid, port, status, voltageINmV, currentINmA);
+        }
         break;
     case InfoCmd::ModulInfo:
         if ((4 == message.length) && (Mode::Req == static_cast<Mode>(message.mode)))
@@ -371,6 +389,24 @@ bool ZCanInterface::onRequestModulPowerInfo(uint16_t id, uint8_t port)
     if (m_debug)
     {
         Serial.println("onRequestModulPowerInfo");
+    }
+    return false;
+}
+
+bool ZCanInterface::onModulPowerInfoEvt(uint16_t nid, uint8_t port, uint16_t status, uint16_t voltageINmV, uint16_t currentINmA)
+{
+    if (m_debug)
+    {
+        Serial.println("onModulPowerInfoEvt");
+    }
+    return false;
+}
+
+bool ZCanInterface::onModulPowerInfoAck(uint16_t nid, uint8_t port, uint16_t status, uint16_t voltageINmV, uint16_t currentINmA)
+{
+    if (m_debug)
+    {
+        Serial.println("onModulPowerInfoAck");
     }
     return false;
 }
