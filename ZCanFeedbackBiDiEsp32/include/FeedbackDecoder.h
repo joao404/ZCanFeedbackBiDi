@@ -24,7 +24,7 @@
 class FeedbackDecoder : public ZCanInterfaceObserver
 {
 public:
-    FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, int buttonPin, bool debug, bool zcanDebug);
+    FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, std::array<uint8_t, 8>& trackPin, bool hasRailcom, int configRailcomPin, int configIdPin, bool debug, bool zcanDebug);
     virtual ~FeedbackDecoder();
 
     void begin();
@@ -62,7 +62,11 @@ protected:
 
     bool m_debug;
 
-    uint8_t m_buttonPin;
+    bool m_hasRailcom;
+
+    uint8_t m_configRailcomPin;
+
+    uint8_t m_configIdPin;
 
     uint16_t m_modulId;
 
@@ -91,11 +95,13 @@ protected:
 
     typedef struct
     {
+        uint8_t pin;
         bool state;
         std::array<uint16_t, 4> adress;
+        unsigned long lastChangeTimeINms;
     } TrackData;
 
-    std::array<TrackData, 8> trackData;
+    std::array<TrackData, 8> m_trackData;
 
 private:
     typedef struct

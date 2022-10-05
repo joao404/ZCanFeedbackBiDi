@@ -14,38 +14,35 @@
  * LICENSE file for more details.
  */
 
-#define BUILDTM_YEAR (\
+#define BUILDTM_YEAR (        \
     __DATE__[7] == '?' ? 1900 \
-    : (((__DATE__[7] - '0') * 1000 ) \
-    + (__DATE__[8] - '0') * 100 \
-    + (__DATE__[9] - '0') * 10 \
-    + __DATE__[10] - '0'))
+                       : (((__DATE__[7] - '0') * 1000) + (__DATE__[8] - '0') * 100 + (__DATE__[9] - '0') * 10 + __DATE__[10] - '0'))
 
-#define BUILDTM_MONTH (\
-    __DATE__ [2] == '?' ? 1 \
-    : __DATE__ [2] == 'n' ? (__DATE__ [1] == 'a' ? 1 : 6) \
-    : __DATE__ [2] == 'b' ? 2 \
-    : __DATE__ [2] == 'r' ? (__DATE__ [0] == 'M' ? 3 : 4) \
-    : __DATE__ [2] == 'y' ? 5 \
-    : __DATE__ [2] == 'l' ? 7 \
-    : __DATE__ [2] == 'g' ? 8 \
-    : __DATE__ [2] == 'p' ? 9 \
-    : __DATE__ [2] == 't' ? 10 \
-    : __DATE__ [2] == 'v' ? 11 \
-    : 12)
+#define BUILDTM_MONTH (                                 \
+    __DATE__[2] == '?'   ? 1                            \
+    : __DATE__[2] == 'n' ? (__DATE__[1] == 'a' ? 1 : 6) \
+    : __DATE__[2] == 'b' ? 2                            \
+    : __DATE__[2] == 'r' ? (__DATE__[0] == 'M' ? 3 : 4) \
+    : __DATE__[2] == 'y' ? 5                            \
+    : __DATE__[2] == 'l' ? 7                            \
+    : __DATE__[2] == 'g' ? 8                            \
+    : __DATE__[2] == 'p' ? 9                            \
+    : __DATE__[2] == 't' ? 10                           \
+    : __DATE__[2] == 'v' ? 11                           \
+                         : 12)
 
-#define BUILDTM_DAY (\
+#define BUILDTM_DAY (      \
     __DATE__[4] == '?' ? 1 \
-    : ((__DATE__[4] == ' ' ? 0 : \
-    ((__DATE__[4] - '0') * 10)) + __DATE__[5] - '0'))
-
+                       : ((__DATE__[4] == ' ' ? 0 : ((__DATE__[4] - '0') * 10)) + __DATE__[5] - '0'))
 
 #include "FeedbackDecoder.h"
 
-FeedbackDecoder::FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, int buttonPin, bool debug, bool zcanDebug)
+FeedbackDecoder::FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, std::array<uint8_t, 8> &trackPin, bool hasRailcom, int configRailcomPin, int configIdPin, bool debug, bool zcanDebug)
     : ZCanInterfaceObserver(zcanDebug),
       m_debug(debug),
-      m_buttonPin(buttonPin),
+      m_hasRailcom(hasRailcom),
+      m_configRailcomPin(configRailcomPin),
+      m_configIdPin(configIdPin),
       m_modulId(0x0),
       m_idPrgStartTimeINms(0),
       m_idPrgRunning(false),
@@ -61,6 +58,13 @@ FeedbackDecoder::FeedbackDecoder(std::string namespaceFeedbackModul, std::string
       m_namespaceFeedbackModul{namespaceFeedbackModul},
       m_keyModulConfig{keyModulConfig}
 {
+    auto sizeTrackData = m_trackData.size();
+    auto sizeTrackPin = trackPin.size();
+    for (uint8_t i = 0; (i < sizeTrackData) && (i < sizeTrackPin); ++i)
+    {
+        m_trackData[i].pin = trackPin[i];
+        memset(m_trackData[i].adress.begin(), 0, sizeof(TrackData::adress));
+    }
 }
 
 FeedbackDecoder::~FeedbackDecoder()
@@ -116,18 +120,39 @@ void FeedbackDecoder::begin()
 
     ZCanInterfaceObserver::begin();
 
-    trackData[0].adress[0] = 0x8022;
-    trackData[2].adress[0] = 0x0023;
-    trackData[4].adress[0] = 0xC024;
-    trackData[7].adress[0] = 0x8025;
+    if (m_hasRailcom)
+    {
 
-    trackData[0].state = true;
-    trackData[2].state = true;
-    trackData[4].state = true;
-    trackData[6].state = true;
-    trackData[7].state = true;
+        pinMode(m_configRailcomPin, INPUT_PULLUP);
 
-    pinMode(m_buttonPin, INPUT_PULLUP);
+        if (!digitalRead(m_configRailcomPin))
+        {
+            // read current values of adcs as default value
+        }
+
+        m_trackData[0].adress[0] = 0x8022;
+        m_trackData[2].adress[0] = 0x0023;
+        m_trackData[4].adress[0] = 0xC024;
+        m_trackData[7].adress[0] = 0x8025;
+
+        m_trackData[0].state = true;
+        m_trackData[2].state = true;
+        m_trackData[4].state = true;
+        m_trackData[6].state = true;
+        m_trackData[7].state = true;
+    }
+    else
+    {
+        for (uint8_t port = 0; port < m_trackData.size(); ++port)
+        {
+            pinMode(m_trackData[port].pin, INPUT_PULLUP);
+            m_trackData[port].state = digitalRead(m_trackData[port].pin);
+            notifyBlockOccupied(port, 0x01, m_trackData[port].state);
+            m_trackData[port].lastChangeTimeINms = millis();
+        }
+    }
+
+    pinMode(m_configIdPin, INPUT_PULLUP);
 
     // Wait random time before starting logging to Z21
     delay(random(1, 20));
@@ -152,11 +177,34 @@ void FeedbackDecoder::cyclic()
             m_idPrgRunning = false;
         }
     }
-    if (!digitalRead(m_buttonPin))
+    if (!digitalRead(m_configIdPin))
     {
         // button pressed
         m_idPrgRunning = true;
         m_idPrgStartTimeINms = currentTimeINms;
+    }
+
+    for (uint8_t port = 0; port < m_trackData.size(); ++port)
+    {
+        bool state = digitalRead(m_trackData[port].pin);
+        if (state != m_trackData[port].state)
+        {
+            if (state)
+            {
+                if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
+                {
+                    notifyBlockOccupied(port, 0x01, state);
+                }
+            }
+            else
+            {
+                if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
+                {
+                    notifyBlockOccupied(port, 0x01, state);
+                }
+            }
+            m_trackData[port].lastChangeTimeINms = currentTimeINms;
+        }
     }
 }
 
@@ -174,6 +222,9 @@ void FeedbackDecoder::callbackAccAddrReceived(uint16_t addr)
 void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
 {
     // start detection of Railcom
+    if (m_hasRailcom)
+    {
+    }
 }
 
 bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, uint16_t adress1, uint16_t adress2, uint16_t adress3, uint16_t adress4)
@@ -199,27 +250,20 @@ void FeedbackDecoder::onIdenticalNetworkId()
 
 bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type)
 {
-    // bool result{false};
-    // if (accessoryId == m_modulId)
-    // {
-    //     result = sendAccessoryDataAck(m_modulId, port, type, 0x8022, 0);
-    // }
-    // return result;
     bool result{false};
     if ((accessoryId == m_modulId) || ((accessoryId & 0xF000) == modulNidMin))
     {
-        if (port < trackData.size())
+        if (port < m_trackData.size())
         {
             if (0x11 == type)
             {
-
                 Serial.println("onAccessoryData");
-                result = sendAccessoryDataAck(m_modulId, port, type, trackData[port].adress[0], trackData[port].adress[1]);
+                result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].adress[0], m_trackData[port].adress[1]);
             }
             else if (0x12 == type)
             {
                 Serial.println("onAccessoryData");
-                result = sendAccessoryDataAck(m_modulId, port, type, trackData[port].adress[2], trackData[port].adress[3]);
+                result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].adress[2], m_trackData[port].adress[3]);
             }
         }
     }
@@ -233,9 +277,9 @@ bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8
     {
         if (0x1 == type)
         {
-            if (port < trackData.size())
+            if (port < m_trackData.size())
             {
-                result = sendAccessoryDataAck(m_modulId, port, type, trackData[port].state ? 0x1100 : 0x0100, 0);
+                result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].state ? 0x1100 : 0x0100, 0);
                 Serial.println("onAccessoryPort6");
             }
         }
@@ -245,9 +289,6 @@ bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8
 
 bool FeedbackDecoder::onRequestModulInfo(uint16_t id, uint16_t type)
 {
-    //__TIME__
-    //__DATE__
-
     bool result{false};
     if (id == m_networkId)
     {
@@ -441,7 +482,7 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
 bool FeedbackDecoder::onRequestPing(uint16_t id)
 {
     bool result{false};
-    if (id == modulNidMin) // TODO
+    if ((id == m_modulId) || ((id & 0xF000) == modulNidMin))
     {
         result = sendPing(m_masterId, m_modulType, m_sessionId);
     }

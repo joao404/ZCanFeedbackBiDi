@@ -23,9 +23,14 @@
 twai_timing_config_t timingConfig = TWAI_TIMING_CONFIG_125KBITS();
 std::shared_ptr<CanInterfaceEsp32> canInterface = std::make_shared<CanInterfaceEsp32>(timingConfig, GPIO_NUM_4, GPIO_NUM_5);
 
+std::array<uint8_t, 8> trackPin1 {16, 17, 18, 19, 21, 22, 23, 25};
+std::array<uint8_t, 8> trackPin2 {26, 27, 32, 33, 34, 35, 36, 39};
+
+bool hasRailcom{false};
+
 // I will need in the end two of those moduls to handle each of the 8 inputs
-FeedbackDecoder feedbackDecoder1("feedbackModul1", "modulConfig", 13, true, true);
-FeedbackDecoder feedbackDecoder2("feedbackModul2", "modulConfig", 14, true, true);
+FeedbackDecoder feedbackDecoder1("feedbackModul1", "modulConfig", trackPin1, hasRailcom, 13, 14, true, true);
+FeedbackDecoder feedbackDecoder2("feedbackModul2", "modulConfig", trackPin2, hasRailcom, 13, 15, true, true);
 
 NmraDcc m_dcc;
 DCC_MSG m_dccPacket;
@@ -52,14 +57,20 @@ void setup()
   feedbackDecoder1.begin();
   feedbackDecoder2.begin();
 
-  pinMode(m_dccPin, OUTPUT);
-  m_dcc.pin(m_dccPin, 0);
-  m_dcc.init(MAN_ID_DIY, 10, CV29_ACCESSORY_DECODER | CV29_OUTPUT_ADDRESS_MODE, 0);
+  if (hasRailcom)
+  {
+    pinMode(m_dccPin, OUTPUT);
+    m_dcc.pin(m_dccPin, 0);
+    m_dcc.init(MAN_ID_DIY, 10, CV29_ACCESSORY_DECODER | CV29_OUTPUT_ADDRESS_MODE, 0);
+  }
 }
 
 void loop()
 {
-  m_dcc.process();
+  if (hasRailcom)
+  {
+    m_dcc.process();
+  }
   canInterface->cyclic();
   feedbackDecoder1.cyclic();
   feedbackDecoder2.cyclic();
