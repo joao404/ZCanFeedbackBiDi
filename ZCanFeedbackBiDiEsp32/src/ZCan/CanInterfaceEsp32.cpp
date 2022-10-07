@@ -79,8 +79,8 @@ void CanInterfaceEsp32::begin()
 
 void CanInterfaceEsp32::cyclic()
 {
-    twai_message_t frame;
-    while (twai_receive(&frame, 0) == ESP_OK)
+    CanMessage frame;
+    while (receive(frame, 0))
     {
         notify(&frame);
     }
@@ -116,7 +116,7 @@ bool CanInterfaceEsp32::receive(CanMessage &frame, uint16_t timeoutINms)
     if (twai_receive(&twaiFrame, pdMS_TO_TICKS(timeoutINms)) == ESP_OK)
     {
         frame.extd = twaiFrame.extd;
-        frame.ss = frame.extd;
+        frame.ss = twaiFrame.ss;
         frame.identifier = twaiFrame.identifier;
         frame.data_length_code = twaiFrame.data_length_code;
 #if TWAI_FRAME_MAX_DLC > 8
