@@ -1,5 +1,5 @@
 /*********************************************************************
- * ZCan Interface Esp32
+ * ZCan Interface
  *
  * Copyright (C) 2022 Marcel Maage
  *
@@ -16,12 +16,10 @@
 
 #pragma once
 
-#include <Arduino.h>
-#include <Printable.h>
 #include <String>
 #include <array>
 
-class ZCanMessage : public Printable
+class ZCanMessage
 {
 
 public:
@@ -60,7 +58,8 @@ public:
      * optional beyond what the message length specifies. Exactly one
      * whitespace is inserted between different fields as a separator.
      */
-    virtual size_t printTo(Print &p) const;
+    //friend std::ostream& operator<<(std::ostream& out, const ZCanMessage& message);
+    std::string getString();
 
     /**
      * Parses the message from the given String. Returns true on
@@ -69,7 +68,6 @@ public:
      * whitespace. If the parsing fails the state of the object is
      * undefined afterwards, and a clear() is recommended.
      */
-    bool parseFrom(String &s);
 };
 
 class ZCanInterface
@@ -154,11 +152,13 @@ public:
     const uint16_t roco10808Type{0x9201};
 
 protected:
-    ZCanInterface(bool debug);
+    ZCanInterface(bool debug, void (*printFunc)(const char *, ...) = nullptr);
 
     virtual ~ZCanInterface();
 
     bool m_debug;
+
+    void (*m_printFunc)(const char *, ...){};
 
     uint16_t m_networkId;
 

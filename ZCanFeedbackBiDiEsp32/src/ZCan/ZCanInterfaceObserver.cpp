@@ -1,5 +1,5 @@
 /*********************************************************************
- * TrainBox Maerklin Esp32
+ * ZCanInterfaceObserver
  *
  * Copyright (C) 2022 Marcel Maage
  *
@@ -16,8 +16,8 @@
 
 #include "ZCan/ZCanInterfaceObserver.h"
 
-ZCanInterfaceObserver::ZCanInterfaceObserver(bool debug)
-    : ZCanInterface(debug)
+ZCanInterfaceObserver::ZCanInterfaceObserver(bool debug, void (*printFunc)(const char *, ...))
+    : ZCanInterface(debug, printFunc)
 {
 }
 
@@ -56,7 +56,7 @@ void ZCanInterfaceObserver::update(Observable &observable, void *data)
       message.group = (frame->identifier >> 24) & 0x0f;
       message.command = (frame->identifier >> 18) & 0x3f;
       message.mode = (frame->identifier >> 16) & 0x03;
-      message.networkId = bitRead(frame->identifier, 16);
+      message.networkId = ((frame->identifier & (1<<16)) ==  (1 << 16));
       message.length = frame->data_length_code;
       message.data = frame->data;
 
@@ -120,7 +120,7 @@ bool ZCanInterfaceObserver::receiveMessage(ZCanMessage &message)
     message.group = (rxFrame.identifier >> 24) & 0x0f;
     message.command = (rxFrame.identifier >> 18) & 0x3f;
     message.mode = (rxFrame.identifier >> 16) & 0x03;
-    message.networkId = bitRead(rxFrame.identifier, 16);
+    message.networkId = ((rxFrame.identifier & (1<<16)) ==  (1 << 16));
     message.length = rxFrame.data_length_code;
     message.data = rxFrame.data;
 

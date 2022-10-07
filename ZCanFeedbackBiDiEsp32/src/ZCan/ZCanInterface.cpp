@@ -1,5 +1,5 @@
 /*********************************************************************
- * ZCan
+ * ZCanInterface
  *
  * Copyright (C) 2022 Marcel Maage
  *
@@ -16,16 +16,17 @@
 
 #include "ZCan/ZCanInterface.h"
 
-size_t printHex(Print &p, unsigned long hex, int digits);
-int parseHex(String &s, int start, int end, bool *ok);
-
-ZCanInterface::ZCanInterface(bool debug)
+ZCanInterface::ZCanInterface(bool debug, void (*printFunc)(const char *, ...))
     : m_debug(debug),
       m_networkId(0xFFFF)
 {
+    if (nullptr != printFunc)
+    {
+        m_printFunc = printFunc;
+    }
     if (m_debug)
     {
-        Serial.println(F("Creating ZCan"));
+        m_printFunc("Creating ZCan");
     }
 }
 
@@ -33,7 +34,7 @@ ZCanInterface::~ZCanInterface()
 {
     if (m_debug)
     {
-        Serial.println(F("Destroying ZCan"));
+        m_printFunc("Destroying ZCan");
     }
 }
 
@@ -43,8 +44,8 @@ void ZCanInterface::begin()
 
 void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
 {
-    // Serial.print("==> ");
-    // Serial.println(message);
+    // m_printFunc("==> ");
+    // m_printFunc(message);
 
     // TODO Handling of NID
     // Wahrscheinlich MX9 ID + DCC accessory adresse
@@ -54,14 +55,14 @@ void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
     {
         if (m_debug)
         {
-            Serial.print("Message with identical network id ");
-            Serial.println(message);
+            m_printFunc("Message with identical network id ");
+            m_printFunc("%s\n", message.getString().c_str());
         }
         onIdenticalNetworkId();
     }
 
-    // Serial.print("Message:");
-    // Serial.println(message);
+    // m_printFunc("Message:");
+    // m_printFunc(message);
 
     bool messageHandled{false};
     switch (static_cast<ZCanInterface::Group>(message.group))
@@ -82,8 +83,8 @@ void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
     default:
         if (m_debug)
         {
-            Serial.print("Unsupported message ");
-            Serial.println(message);
+            m_printFunc("Unsupported message ");
+            m_printFunc("%s\n", message.getString().c_str());
         }
         break;
     }
@@ -91,8 +92,8 @@ void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
     {
         if (m_debug)
         {
-            Serial.print("Unsupported message ");
-            Serial.println(message);
+            m_printFunc("Unsupported message ");
+            m_printFunc("%s\n", message.getString().c_str());
         }
     }
 }
@@ -187,8 +188,8 @@ bool ZCanInterface::handleAccessoryMessage(ZCanMessage &message)
     default:
         if (m_debug)
         {
-            Serial.print("Unkown accessory message:");
-            Serial.println(message);
+            m_printFunc("Unkown accessory message:");
+            m_printFunc("%s\n", message.getString().c_str());
         }
         break;
     }
@@ -265,8 +266,8 @@ bool ZCanInterface::handleInfoMessage(ZCanMessage &message)
     default:
         if (m_debug)
         {
-            Serial.print("Unkown info message:");
-            Serial.println(message);
+            m_printFunc("Unkown info message:");
+            m_printFunc("%s\n", message.getString().c_str());
         }
         break;
     }
@@ -295,8 +296,8 @@ bool ZCanInterface::handleNetworkMessage(ZCanMessage &message)
     default:
         if (m_debug)
         {
-            Serial.print("Unkown info message:");
-            Serial.println(message);
+            m_printFunc("Unkown info message:");
+            m_printFunc("%s\n", message.getString().c_str());
         }
         break;
     }
@@ -307,7 +308,7 @@ bool ZCanInterface::onAccessoryStatus(uint16_t accessoryId)
 {
     if (m_debug)
     {
-        Serial.println("onAccessoryStatus");
+        m_printFunc("onAccessoryStatus");
     }
     return false;
 }
@@ -316,7 +317,7 @@ bool ZCanInterface::onAccessoryMode(uint16_t accessoryId)
 {
     if (m_debug)
     {
-        Serial.println("onAccessoryMode");
+        m_printFunc("onAccessoryMode");
     }
     return false;
 }
@@ -325,7 +326,7 @@ bool ZCanInterface::onAccessoryGpio(uint16_t accessoryId, uint16_t type)
 {
     if (m_debug)
     {
-        Serial.println("onAccessoryGpio");
+        m_printFunc("onAccessoryGpio");
     }
     return false;
 }
@@ -334,7 +335,7 @@ bool ZCanInterface::onAccessoryPort4(uint16_t accessoryId, uint8_t port)
 {
     if (m_debug)
     {
-        Serial.println("onAccessoryPort4Req");
+        m_printFunc("onAccessoryPort4Req");
     }
     return false;
 }
@@ -343,7 +344,7 @@ bool ZCanInterface::onAccessoryPort4(uint16_t accessoryId, uint8_t port, uint8_t
 {
     if (m_debug)
     {
-        Serial.println("onAccessoryPort4");
+        m_printFunc("onAccessoryPort4");
     }
     return false;
 }
@@ -352,7 +353,7 @@ bool ZCanInterface::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t 
 {
     if (m_debug)
     {
-        Serial.println("onAccessoryData");
+        m_printFunc("onAccessoryData");
     }
     return false;
 }
@@ -361,7 +362,7 @@ bool ZCanInterface::onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8
 {
     if (m_debug)
     {
-        Serial.println("onAccessorySetData");
+        m_printFunc("onAccessorySetData");
     }
     return false;
 }
@@ -370,7 +371,7 @@ bool ZCanInterface::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t
 {
     if (m_debug)
     {
-        Serial.println("onAccessoryPort6Req");
+        m_printFunc("onAccessoryPort6Req");
     }
     return false;
 }
@@ -379,7 +380,7 @@ bool ZCanInterface::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t
 {
     if (m_debug)
     {
-        Serial.println("onAccessoryPort6");
+        m_printFunc("onAccessoryPort6");
     }
     return false;
 }
@@ -388,7 +389,7 @@ bool ZCanInterface::onRequestModulPowerInfo(uint16_t id, uint8_t port)
 {
     if (m_debug)
     {
-        Serial.println("onRequestModulPowerInfo");
+        m_printFunc("onRequestModulPowerInfo");
     }
     return false;
 }
@@ -397,7 +398,7 @@ bool ZCanInterface::onModulPowerInfoEvt(uint16_t nid, uint8_t port, uint16_t sta
 {
     if (m_debug)
     {
-        Serial.println("onModulPowerInfoEvt");
+        m_printFunc("onModulPowerInfoEvt");
     }
     return false;
 }
@@ -406,7 +407,7 @@ bool ZCanInterface::onModulPowerInfoAck(uint16_t nid, uint8_t port, uint16_t sta
 {
     if (m_debug)
     {
-        Serial.println("onModulPowerInfoAck");
+        m_printFunc("onModulPowerInfoAck");
     }
     return false;
 }
@@ -415,7 +416,7 @@ bool ZCanInterface::onRequestModulInfo(uint16_t id, uint16_t type)
 {
     if (m_debug)
     {
-        Serial.println("onRequestModulInfo");
+        m_printFunc("onRequestModulInfo");
     }
     return false;
 }
@@ -424,7 +425,7 @@ bool ZCanInterface::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
 {
     if (m_debug)
     {
-        Serial.println("onCmdModulInfo");
+        m_printFunc("onCmdModulInfo");
     }
     return false;
 }
@@ -433,7 +434,7 @@ bool ZCanInterface::onRequestModulObjectConfig(uint16_t id, uint32_t tag)
 {
     if (m_debug)
     {
-        Serial.println("onRequestModulObjectConfig");
+        m_printFunc("onRequestModulObjectConfig");
     }
     return false;
 }
@@ -442,7 +443,7 @@ bool ZCanInterface::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t v
 {
     if (m_debug)
     {
-        Serial.println("onCmdModulObjectConfig");
+        m_printFunc("onCmdModulObjectConfig");
     }
     return false;
 }
@@ -451,7 +452,7 @@ bool ZCanInterface::onAckModulObjectConfig(uint16_t id, uint32_t tag, uint16_t v
 {
     if (m_debug)
     {
-        Serial.println("onAckModulObjectConfig");
+        m_printFunc("onAckModulObjectConfig");
     }
     return false;
 }
@@ -460,7 +461,7 @@ bool ZCanInterface::onRequestPing(uint16_t id)
 {
     if (m_debug)
     {
-        Serial.println("onRequestPing");
+        m_printFunc("onRequestPing");
     }
     return false;
 }
@@ -469,7 +470,7 @@ bool ZCanInterface::onPing(uint16_t nid, uint32_t masterUid, uint16_t type, uint
 {
     if (m_debug)
     {
-        Serial.println("onPing");
+        m_printFunc("onPing");
     }
     return false;
 }
@@ -906,56 +907,6 @@ void ZCanInterface::messageRequestPortOpen(ZCanMessage &message)
 }
 
 // ===================================================================
-// === PrintOut Functions=============================================
-// ===================================================================
-
-size_t printHex(Print &p, unsigned long hex, int digits)
-{
-    size_t size = 0;
-
-    String s = String(hex, HEX);
-
-    for (int i = s.length(); i < digits; i++)
-    {
-        size += p.print("0");
-    }
-
-    size += p.print(s);
-
-    return size;
-}
-
-int parseHex(String &s, int start, int end, bool *ok)
-{
-    int value = 0;
-
-    for (int i = start; i < end; i++)
-    {
-        char c = s.charAt(i);
-
-        if (c >= '0' && c <= '9')
-        {
-            value = 16 * value + c - '0';
-        }
-        else if (c >= 'a' && c <= 'f')
-        {
-            value = 16 * value + 10 + c - 'a';
-        }
-        else if (c >= 'A' && c <= 'F')
-        {
-            value = 16 * value + 10 + c - 'A';
-        }
-        else
-        {
-            *ok = false;
-            return -1;
-        }
-    }
-
-    return value;
-}
-
-// ===================================================================
 // === ZCanMessage ==================================================
 // ===================================================================
 
@@ -969,60 +920,59 @@ void ZCanMessage::clear()
     data.fill(0);
 }
 
-size_t ZCanMessage::printTo(Print &p) const
+std::string ZCanMessage::getString()
 {
-    size_t size = 0;
-
-    size += printHex(p, group, 2);
-    size += p.print(" ");
-    size += printHex(p, command, 2);
-    size += p.print(" ");
-    size += printHex(p, mode, 1);
-    size += p.print(" ");
-    size += printHex(p, networkId, 1);
-    size += p.print(" ");
-    size += printHex(p, length, 1);
-
-    for (int i = 0; i < length; i++)
+    std::string out;
+    char hexString[32];
+    sprintf(hexString, "%lX ", group); // convert number to hex
+    out += hexString;
+    sprintf(hexString, "%lX ", command); // convert number to hex
+    out += hexString;
+    sprintf(hexString, "%lX ", mode); // convert number to hex
+    out += hexString;
+    sprintf(hexString, "%lX ", networkId); // convert number to hex
+    out += hexString;
+    sprintf(hexString, "%X", length); // convert number to hex
+    out += hexString;
+    for (uint8_t i = 0; i < length; i++)
     {
-        size += p.print(" ");
-        size += printHex(p, data[i], 2);
+        sprintf(hexString, " %X", data[i]); // convert number to hex
+        out += hexString;
     }
-
-    return size;
+    return out;
 }
 
-bool ZCanMessage::parseFrom(String &s)
-{
-    bool result = true;
+// bool ZCanMessage::parseFrom(String &s)
+// {
+//     bool result = true;
 
-    clear();
+//     clear();
 
-    if (s.length() < 11)
-    {
-        return false;
-    }
+//     if (s.length() < 11)
+//     {
+//         return false;
+//     }
 
-    group = parseHex(s, 0, 2, &result);
-    // TODO:
-    // response = s.charAt(5) != ' ';
-    command = parseHex(s, 7, 9, &result);
-    length = parseHex(s, 10, 11, &result);
+//     group = parseHex(s, 0, 2, &result);
+//     // TODO:
+//     // response = s.charAt(5) != ' ';
+//     command = parseHex(s, 7, 9, &result);
+//     length = parseHex(s, 10, 11, &result);
 
-    if (length > 8)
-    {
-        return false;
-    }
+//     if (length > 8)
+//     {
+//         return false;
+//     }
 
-    if (s.length() < 11 + 3 * length)
-    {
-        return false;
-    }
+//     if (s.length() < 11 + 3 * length)
+//     {
+//         return false;
+//     }
 
-    for (int i = 0; i < length; i++)
-    {
-        data[i] = parseHex(s, 12 + 3 * i, 12 + 3 * i + 2, &result);
-    }
+//     for (int i = 0; i < length; i++)
+//     {
+//         data[i] = parseHex(s, 12 + 3 * i, 12 + 3 * i + 2, &result);
+//     }
 
-    return result;
-}
+//     return result;
+// }

@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <Arduino.h>
 #include <memory>
 #include "ZCan/ZCanInterface.h"
 #include "ZCan/CanInterface.h"
@@ -31,7 +30,7 @@ public:
      * Creates a new TrackController with the given hash and debugging
      * flag. A zero hash will result in a unique hash begin generated.
      */
-    ZCanInterfaceObserver(bool debug);
+    ZCanInterfaceObserver(bool debug, void (*printFunc)(const char *, ...) = nullptr);
 
     /**
      * Is called when a TrackController is being destroyed. Does the

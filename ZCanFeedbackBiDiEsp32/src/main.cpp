@@ -19,18 +19,24 @@
 
 #include "ZCan/CanInterfaceEsp32.h"
 #include "FeedbackDecoder.h"
+#include <NmraDcc.h>
+#include "xprintf.h"
 
 twai_timing_config_t timingConfig = TWAI_TIMING_CONFIG_125KBITS();
 std::shared_ptr<CanInterfaceEsp32> canInterface = std::make_shared<CanInterfaceEsp32>(timingConfig, GPIO_NUM_4, GPIO_NUM_5);
 
-std::array<uint8_t, 8> trackPin1 {16, 17, 18, 19, 21, 22, 23, 25};
-std::array<uint8_t, 8> trackPin2 {26, 27, 32, 33, 34, 35, 36, 39};
+std::array<uint8_t, 8> trackPin1{16, 17, 18, 19, 21, 22, 23, 25};
+std::array<uint8_t, 8> trackPin2{26, 27, 32, 33, 34, 35, 36, 39};
 
 bool hasRailcom{false};
 
+void uart_putc(uint8_t d)
+{
+  Serial.print((char)d);
+}
 // I will need in the end two of those moduls to handle each of the 8 inputs
-FeedbackDecoder feedbackDecoder1("feedbackModul1", "modulConfig", trackPin1, hasRailcom, 13, 14, true, true);
-FeedbackDecoder feedbackDecoder2("feedbackModul2", "modulConfig", trackPin2, hasRailcom, 13, 15, true, true);
+FeedbackDecoder feedbackDecoder1("feedbackModul1", "modulConfig", xprintf, trackPin1, hasRailcom, 13, 14, true, true);
+FeedbackDecoder feedbackDecoder2("feedbackModul2", "modulConfig", xprintf, trackPin2, hasRailcom, 13, 15, true, true);
 
 NmraDcc m_dcc;
 DCC_MSG m_dccPacket;
@@ -39,6 +45,7 @@ uint8_t m_dccPin{2};
 void setup()
 {
   Serial.begin(230000);
+  xdev_out(uart_putc);
 
   if (nullptr != canInterface.get())
   {

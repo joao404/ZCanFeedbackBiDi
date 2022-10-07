@@ -37,8 +37,8 @@
 
 #include "FeedbackDecoder.h"
 
-FeedbackDecoder::FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, std::array<uint8_t, 8> &trackPin, bool hasRailcom, int configRailcomPin, int configIdPin, bool debug, bool zcanDebug)
-    : ZCanInterfaceObserver(zcanDebug),
+FeedbackDecoder::FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, void (*printFunc)(const char *, ...), std::array<uint8_t, 8> &trackPin, bool hasRailcom, int configRailcomPin, int configIdPin, bool debug, bool zcanDebug)
+    : ZCanInterfaceObserver(zcanDebug, printFunc),
       m_debug(debug),
       m_hasRailcom(hasRailcom),
       m_configRailcomPin(configRailcomPin),
@@ -73,6 +73,7 @@ FeedbackDecoder::~FeedbackDecoder()
 
 void FeedbackDecoder::begin()
 {
+    Serial.println(F("Starting Feedback Decoder"));
     if (!m_preferences.begin(m_namespaceFeedbackModul.c_str(), false))
     {
         Serial.println(F("Access preferences failed"));
@@ -115,8 +116,8 @@ void FeedbackDecoder::begin()
     uint32_t month = BUILDTM_MONTH;
     uint32_t year = BUILDTM_YEAR;
     m_buildDate = (year << 16) | (month << 8) | day;
-    Serial.printf("SW Version: 0x%08X, build date: 0x%08X\n", m_firmwareVersion, m_buildDate);
-    Serial.printf("%s: NetworkId %x MA %x CH2 %x\n", m_namespaceFeedbackModul.c_str(), m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
+    m_printFunc("SW Version: 0x%08X, build date: 0x%08X\n", m_firmwareVersion, m_buildDate);
+    m_printFunc("%s: NetworkId %x MA %x CH2 %x\n", m_namespaceFeedbackModul.c_str(), m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
 
     ZCanInterfaceObserver::begin();
 
@@ -160,7 +161,7 @@ void FeedbackDecoder::begin()
     // Send first ping
     sendPing(m_masterId, m_modulType, m_sessionId);
 
-    Serial.printf("%s finished config\n", m_namespaceFeedbackModul.c_str());
+    m_printFunc("%s finished config\n", m_namespaceFeedbackModul.c_str());
 }
 
 void FeedbackDecoder::cyclic()
@@ -257,12 +258,12 @@ bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_
         {
             if (0x11 == type)
             {
-                Serial.println("onAccessoryData");
+                m_printFunc("onAccessoryData\n");
                 result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].adress[0], m_trackData[port].adress[1]);
             }
             else if (0x12 == type)
             {
-                Serial.println("onAccessoryData");
+                m_printFunc("onAccessoryData\n");
                 result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].adress[2], m_trackData[port].adress[3]);
             }
         }
@@ -280,7 +281,7 @@ bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8
             if (port < m_trackData.size())
             {
                 result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].state ? 0x1100 : 0x0100, 0);
-                Serial.println("onAccessoryPort6");
+                m_printFunc("onAccessoryPort6\n");
             }
         }
     }
@@ -292,7 +293,7 @@ bool FeedbackDecoder::onRequestModulInfo(uint16_t id, uint16_t type)
     bool result{false};
     if (id == m_networkId)
     {
-        Serial.println("onRequestModulInfo");
+        m_printFunc("onRequestModulInfo\n");
         result = true;
         switch (type)
         {
@@ -327,7 +328,7 @@ bool FeedbackDecoder::onModulPowerInfoEvt(uint16_t nid, uint8_t port, uint16_t s
 {
     if (m_debug)
     {
-        Serial.println("onModulPowerInfoEvt");
+        m_printFunc("onModulPowerInfoEvt\n");
     }
     return true;
 }
@@ -336,7 +337,7 @@ bool FeedbackDecoder::onModulPowerInfoAck(uint16_t nid, uint8_t port, uint16_t s
 {
     if (m_debug)
     {
-        Serial.println("onModulPowerInfoAck");
+        m_printFunc("onModulPowerInfoAck\n");
     }
     return true;
 }
@@ -346,7 +347,7 @@ bool FeedbackDecoder::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
     bool result{false};
     if (id == m_networkId)
     {
-        Serial.println("onCmdModulInfo");
+        m_printFunc("onCmdModulInfo\n");
         result = true;
         switch (type)
         {
@@ -373,7 +374,7 @@ bool FeedbackDecoder::onRequestModulObjectConfig(uint16_t id, uint32_t tag)
     bool result{false};
     if (id == m_networkId)
     {
-        Serial.println("onRequestModulObjectConfig");
+        m_printFunc("onRequestModulObjectConfig\n");
         uint16_t value{0};
         switch (tag)
         {
@@ -443,35 +444,35 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
         {
         case 0x00221001:
             m_modulConfig.sendChannel2Data = ((value & 0x0010) == 0x0010);
-            Serial.printf("Write Send Channel 2 %u\n", m_modulConfig.sendChannel2Data);
+            m_printFunc("Write Send Channel 2 %u\n", m_modulConfig.sendChannel2Data);
             saveConfig();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         case 0x00401001:
             m_modulConfig.trackConfig.trackSetCurrentINmA = value;
-            Serial.printf("Write SetCurrent %u\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
+            m_printFunc("Write SetCurrent %u\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
             saveConfig();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         case 0x00501001:
             m_modulConfig.trackConfig.trackFreeToSetTimeINms = value;
-            Serial.printf("Write FreeToSetTime %u\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
+            m_printFunc("Write FreeToSetTime %u\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
             saveConfig();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         case 0x00511001:
             m_modulConfig.trackConfig.trackSetToFreeTimeINms = value;
-            Serial.printf("Write SetToFreeTime %u\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
+            m_printFunc("Write SetToFreeTime %u\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
             saveConfig();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         default:
             // all other values are handled
-            Serial.printf("Handle tag %x\n", tag);
+            m_printFunc("Handle tag %x\n", tag);
             result = true;
             break;
         }
@@ -495,7 +496,7 @@ bool FeedbackDecoder::onPing(uint16_t id, uint32_t masterUid, uint16_t type, uin
     {
         if (m_debug)
         {
-            Serial.printf("New master %x", masterUid);
+            m_printFunc("New master %x\n", masterUid);
         }
         m_masterId = masterUid;
         m_sessionId = sessionId;

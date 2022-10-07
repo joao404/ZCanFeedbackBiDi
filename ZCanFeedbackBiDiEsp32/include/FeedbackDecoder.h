@@ -16,7 +16,6 @@
 
 #pragma once
 #include <Arduino.h>
-#include <NmraDcc.h>
 #include "ZCan/ZCanInterfaceObserver.h"
 #include "Preferences.h"
 #include <array>
@@ -24,7 +23,7 @@
 class FeedbackDecoder : public ZCanInterfaceObserver
 {
 public:
-    FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, std::array<uint8_t, 8>& trackPin, bool hasRailcom, int configRailcomPin, int configIdPin, bool debug, bool zcanDebug);
+    FeedbackDecoder(std::string namespaceFeedbackModul, std::string keyModulConfig, void (*printFunc)(const char *, ...), std::array<uint8_t, 8> &trackPin, bool hasRailcom, int configRailcomPin, int configIdPin, bool debug, bool zcanDebug);
     virtual ~FeedbackDecoder();
 
     void begin();
