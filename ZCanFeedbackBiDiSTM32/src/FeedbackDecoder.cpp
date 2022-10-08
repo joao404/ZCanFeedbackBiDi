@@ -36,8 +36,8 @@
                        : ((__DATE__[4] == ' ' ? 0 : ((__DATE__[4] - '0') * 10)) + __DATE__[5] - '0'))
 
 #include "FeedbackDecoder.h"
-#include "Helper/millis.h"
 #include "Helper/micros.h"
+#include "stm32f1xx_hal.h"
 #include <algorithm>
 #include <cstring>
 
@@ -96,7 +96,7 @@ void FeedbackDecoder::begin()
         m_modulConfig.trackConfig.trackSetCurrentINmA = 10;
         m_modulConfig.trackConfig.trackFreeToSetTimeINms = 0;
         m_modulConfig.trackConfig.trackSetToFreeTimeINms = 1000;
-        m_modulConfig.sendChannel2Data = false;
+        m_modulConfig.sendChannel2Data = 0;
         m_saveDataFkt();
     }
 
@@ -144,7 +144,7 @@ void FeedbackDecoder::begin()
             // pinMode(m_trackData[port].pin, INPUT_PULLUP);
             m_trackData[port].state = (GPIO_PIN_SET == HAL_GPIO_ReadPin(m_trackData[port].pin.bank, m_trackData[port].pin.pin));
             notifyBlockOccupied(port, 0x01, m_trackData[port].state);
-            m_trackData[port].lastChangeTimeINms = millis();
+            m_trackData[port].lastChangeTimeINms = HAL_GetTick();
         }
     }
 
@@ -162,7 +162,7 @@ void FeedbackDecoder::begin()
 
 void FeedbackDecoder::cyclic()
 {
-    unsigned long currentTimeINms{millis()};
+    unsigned long currentTimeINms{HAL_GetTick()};
     if ((m_lastCanCmdSendINms + m_pingIntervalINms) < currentTimeINms)
     {
         sendPing(m_masterId, m_modulType, m_sessionId);
@@ -240,7 +240,7 @@ bool FeedbackDecoder::notifyBlockOccupied(uint8_t port, uint8_t type, bool occup
 void FeedbackDecoder::onIdenticalNetworkId()
 {
     // received own network id. Generate new random network id
-    m_modulConfig.networkId = modulNidMin + std::max((uint16_t)1, (uint16_t)(millis() % (modulNidMax - modulNidMin)));
+    m_modulConfig.networkId = modulNidMin + std::max((uint16_t)1, (uint16_t)(HAL_GetTick() % (modulNidMax - modulNidMin)));
     m_saveDataFkt();
     sendPing(m_masterId, m_modulType, m_sessionId);
 }
@@ -439,7 +439,7 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
         switch (tag)
         {
         case 0x00221001:
-            m_modulConfig.sendChannel2Data = ((value & 0x0010) == 0x0010);
+            m_modulConfig.sendChannel2Data = ((value & 0x0010) == 0x0010) ? 1 : 0;
             m_printFunc("Write Send Channel 2 %u\n", m_modulConfig.sendChannel2Data);
             m_saveDataFkt();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
@@ -503,6 +503,6 @@ bool FeedbackDecoder::onPing(uint16_t id, uint32_t masterUid, uint16_t type, uin
 
 bool FeedbackDecoder::sendMessage(ZCanMessage &message)
 {
-    m_lastCanCmdSendINms = millis();
+    m_lastCanCmdSendINms = HAL_GetTick();
     return ZCanInterfaceObserver::sendMessage(message);
 }

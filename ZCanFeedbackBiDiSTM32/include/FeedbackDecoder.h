@@ -25,16 +25,16 @@ public:
     // every variable must have size of 16 bits to fit memory layout
     typedef struct
     {
-        uint16_t trackSetCurrentINmA : 16;
-        uint16_t trackFreeToSetTimeINms : 16;
-        uint16_t trackSetToFreeTimeINms : 16;
+        uint16_t trackSetCurrentINmA;
+        uint16_t trackFreeToSetTimeINms;
+        uint16_t trackSetToFreeTimeINms;
     } TrackConfig;
 
     typedef struct
     {
-        uint16_t networkId : 16;
-        uint8_t modulAdress : 16;
-        bool sendChannel2Data : 16;
+        uint16_t networkId;
+        uint16_t modulAdress;
+        uint16_t sendChannel2Data;
         // std::array<TrackConfig, 8> trackConfig;
         TrackConfig trackConfig;
     } ModulConfig;

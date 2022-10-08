@@ -24,7 +24,6 @@
 #include "FeedbackDecoder.h"
 #include "Helper/xprintf.h"
 #include "Helper/micros.h"
-#include "Helper/millis.h"
 #include <vector>
 #include <memory>
 
@@ -82,7 +81,6 @@ int main(void)
   xdev_out(uart_putc);
   HAL_Init();
   SystemClock_Config();
-  initMillis();
   if(DWT_Delay_Init())
   {
     xprintf("Error DWT_Delay_Init()\n");
