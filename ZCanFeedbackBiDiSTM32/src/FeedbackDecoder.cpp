@@ -37,7 +37,6 @@
 
 #include "FeedbackDecoder.h"
 #include "Helper/micros.h"
-#include "stm32f1xx_hal.h"
 #include <algorithm>
 #include <cstring>
 
@@ -166,6 +165,7 @@ void FeedbackDecoder::cyclic()
     if ((m_lastCanCmdSendINms + m_pingIntervalINms) < currentTimeINms)
     {
         sendPing(m_masterId, m_modulType, m_sessionId);
+        m_lastCanCmdSendINms = currentTimeINms;
     }
     if (m_idPrgRunning)
     {

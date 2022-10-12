@@ -16,7 +16,7 @@
 
 #pragma once
 #include "ZCan/ZCanInterfaceObserver.h"
-#include "stm32hal/gpio.h"
+#include "main.h"
 #include <array>
 
 class FeedbackDecoder : public ZCanInterfaceObserver

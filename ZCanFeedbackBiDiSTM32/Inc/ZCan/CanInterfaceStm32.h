@@ -17,7 +17,7 @@
 #pragma once
 
 #include "ZCan/CanInterface.h"
-#include "stm32hal/can.h"
+#include "main.h"
 
 class CanInterfaceStm32 : public CanInterface
 {
@@ -38,10 +38,19 @@ public:
 
     bool receive(CanMessage &frame, uint16_t timeoutINms) override;
 
+    static void CanMspInit(CAN_HandleTypeDef *hcan);
+    static void CanMspDeInit(CAN_HandleTypeDef *hcan);
+
     static void canReceiveInterrupt(CAN_RxHeaderTypeDef &frameHeader, uint8_t &data);
+
+    static void rxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
+
+    static void rxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan);
 
 private:
     static std::shared_ptr<CanInterfaceStm32> m_instance;
+
+    CAN_HandleTypeDef m_canHandle;
 
     bool m_usingInterrupt;
 

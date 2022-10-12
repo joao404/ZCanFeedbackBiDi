@@ -2,7 +2,7 @@
 #pragma once
 
 // #include "stm32_def.h"
-#include "stm32hal/main.h"
+#include "main.h"
 
 //#include "stm32yyxx_hal.h"
 /**

@@ -21,7 +21,8 @@
 std::shared_ptr<CanInterfaceStm32> CanInterfaceStm32::m_instance;
 
 CanInterfaceStm32::CanInterfaceStm32(bool useInterrupt, void (*printFunc)(const char *, ...))
-    : m_usingInterrupt(useInterrupt)
+    : m_canHandle{},
+      m_usingInterrupt(useInterrupt)
 {
     if (nullptr != printFunc)
     {
@@ -35,35 +36,119 @@ CanInterfaceStm32::~CanInterfaceStm32()
 
 std::shared_ptr<CanInterfaceStm32> CanInterfaceStm32::createInstance(bool useInterrupt, void (*printFunc)(const char *, ...))
 {
-    if(nullptr == CanInterfaceStm32::m_instance.get())
+    if (nullptr == CanInterfaceStm32::m_instance.get())
     {
-      CanInterfaceStm32::m_instance = std::make_shared<CanInterfaceStm32>(useInterrupt, printFunc);
+        CanInterfaceStm32::m_instance = std::make_shared<CanInterfaceStm32>(useInterrupt, printFunc);
     }
     return CanInterfaceStm32::m_instance;
 }
 
 void CanInterfaceStm32::begin()
 {
-    m_printFunc("Setting up CAN...\n");
-    // CAN_FilterTypeDef sFilterConfig;
-    MX_CAN_Init();
+    m_printFunc("Setting up CAN GPIO...\n");
 
-    if (HAL_CAN_Start(&hcan) != HAL_OK)
+    __HAL_CAN_RESET_HANDLE_STATE(&m_canHandle);
+
+    if (HAL_OK != HAL_CAN_RegisterCallback(&m_canHandle, HAL_CAN_CallbackIDTypeDef::HAL_CAN_MSPINIT_CB_ID, CanInterfaceStm32::CanMspInit))
     {
-        /* Start Error */
-        m_printFunc("HAL_CAN_Start: %d\n", HAL_CAN_GetError(&hcan));
-        Error_Handler();
+        m_printFunc("HAL_CAN_RegisterCallback MSP Init: %d\n", HAL_CAN_GetError(&m_canHandle));
+        while (1)
+        {
+        }
+    }
+    if (HAL_OK != HAL_CAN_RegisterCallback(&m_canHandle, HAL_CAN_CallbackIDTypeDef::HAL_CAN_MSPDEINIT_CB_ID, CanInterfaceStm32::CanMspDeInit))
+    {
+        m_printFunc("HAL_CAN_RegisterCallback MSP DeInit: %d\n", HAL_CAN_GetError(&m_canHandle));
+        while (1)
+        {
+        }
     }
 
-    // HAL_CAN_RegisterCallback(&hcan, HAL_CAN_TX_MAILBOX0_COMPLETE_CB_ID, HAL_CAN_TxMailbox0CompleteCallback);
-    // HAL_CAN_RegisterCallback(&hcan, HAL_CAN_RX_FIFO0_MSG_PENDING_CB_ID, HAL_CAN_RxFIFO0MsgPendingCallback);
+    m_canHandle.Instance = CAN1;
+    m_canHandle.Init.Prescaler = 18;
+    m_canHandle.Init.Mode = CAN_MODE_NORMAL;
+    m_canHandle.Init.SyncJumpWidth = CAN_SJW_1TQ;
+    m_canHandle.Init.TimeSeg1 = CAN_BS1_13TQ;
+    m_canHandle.Init.TimeSeg2 = CAN_BS2_2TQ;
+    m_canHandle.Init.TimeTriggeredMode = DISABLE;
+    m_canHandle.Init.AutoBusOff = ENABLE;
+    m_canHandle.Init.AutoWakeUp = DISABLE;
+    m_canHandle.Init.AutoRetransmission = DISABLE;
+    m_canHandle.Init.ReceiveFifoLocked = DISABLE;
+    m_canHandle.Init.TransmitFifoPriority = DISABLE;
+    if (HAL_CAN_DeInit(&m_canHandle) != HAL_OK)
+    {
+        m_printFunc("HAL_CAN_DeInit: %d, %d\n", HAL_CAN_GetError(&m_canHandle), HAL_CAN_GetState(&m_canHandle));
+        while (1)
+        {
+        }
+    }
+    HAL_CAN_ResetError(&m_canHandle);
+    m_printFunc("HAL_CAN_Init\n");
+    if (HAL_CAN_Init(&m_canHandle) != HAL_OK)
+    {
+        m_printFunc("HAL_CAN_Init: %d, %d\n", HAL_CAN_GetError(&m_canHandle), HAL_CAN_GetState(&m_canHandle));
+        while (1)
+        {
+        }
+    }
+
+    CAN_FilterTypeDef sFilterConfig;
+    sFilterConfig.FilterBank = 0;
+    sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+    sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
+    sFilterConfig.FilterIdHigh = 0x0000;
+    sFilterConfig.FilterIdLow = 0x0000;
+    sFilterConfig.FilterMaskIdHigh = 0x0000;
+    sFilterConfig.FilterMaskIdLow = 0x0000;
+    sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
+    sFilterConfig.FilterActivation = ENABLE;
+
+    if (HAL_CAN_ConfigFilter(&m_canHandle, &sFilterConfig) != HAL_OK)
+    {
+        /* Filter configuration Error */
+        m_printFunc("HAL_CAN_ConfigFilter: %d\n", HAL_CAN_GetError(&m_canHandle));
+        while (1)
+        {
+        }
+    }
+
+    m_printFunc("Starting CAN...\n");
+
+    if (HAL_CAN_Start(&m_canHandle) != HAL_OK)
+    {
+        /* Start Error */
+        m_printFunc("HAL_CAN_Start: %d\n", HAL_CAN_GetError(&m_canHandle));
+        while (1)
+        {
+        }
+    }
+
     if (m_usingInterrupt)
     {
-        if (HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_RX_FIFO1_MSG_PENDING | CAN_IT_TX_MAILBOX_EMPTY) != HAL_OK)
+        if (HAL_OK != HAL_CAN_RegisterCallback(&m_canHandle, HAL_CAN_CallbackIDTypeDef::HAL_CAN_RX_FIFO0_MSG_PENDING_CB_ID, CanInterfaceStm32::rxFifo0MsgPendingCallback))
+        {
+            m_printFunc("HAL_CAN_RegisterCallback RxFiFo0: %d\n", HAL_CAN_GetError(&m_canHandle));
+            while (1)
+            {
+            }
+        }
+        if (HAL_OK != HAL_CAN_RegisterCallback(&m_canHandle, HAL_CAN_CallbackIDTypeDef::HAL_CAN_RX_FIFO1_MSG_PENDING_CB_ID, CanInterfaceStm32::rxFifo1MsgPendingCallback))
+        {
+            m_printFunc("HAL_CAN_RegisterCallback RxFiFo1: %d\n", HAL_CAN_GetError(&m_canHandle));
+            while (1)
+            {
+            }
+        }
+
+        // if (HAL_CAN_ActivateNotification(&m_canHandle, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_RX_FIFO1_MSG_PENDING | CAN_IT_TX_MAILBOX_EMPTY) != HAL_OK)
+        if (HAL_CAN_ActivateNotification(&m_canHandle, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_RX_FIFO1_MSG_PENDING) != HAL_OK)
         {
             /* Notification Error */
-            m_printFunc("HAL_CAN_ActivateNotification: %d\n", HAL_CAN_GetError(&hcan));
-            Error_Handler();
+            m_printFunc("HAL_CAN_ActivateNotification: %d\n", HAL_CAN_GetError(&m_canHandle));
+            while (1)
+            {
+            }
         }
     }
 }
@@ -72,8 +157,8 @@ void CanInterfaceStm32::cyclic()
 {
     if (!m_usingInterrupt)
     {
-        CanMessage frame;
-        while (receive(frame, 0))
+        CanMessage frame{};
+        if (receive(frame, 0))
         {
             notify(&frame);
         }
@@ -91,15 +176,15 @@ bool CanInterfaceStm32::transmit(CanMessage &frame, uint16_t timeoutINms)
     canFrame.DLC = frame.data_length_code;
     bool result{false};
     uint32_t m_txMailbox;
-    if (HAL_CAN_GetTxMailboxesFreeLevel(&hcan) != 0)
+    if (HAL_CAN_GetTxMailboxesFreeLevel(&m_canHandle) != 0)
     {
-        if (HAL_CAN_AddTxMessage(&hcan, &canFrame, &frame.data[0], &m_txMailbox) != HAL_OK)
+        if (HAL_CAN_AddTxMessage(&m_canHandle, &canFrame, &frame.data[0], &m_txMailbox) != HAL_OK)
         {
-            m_printFunc("Error TX: %d\n", HAL_CAN_GetError(&hcan));
+            m_printFunc("Error TX: %d\n", HAL_CAN_GetError(&m_canHandle));
         }
         else
         {
-            m_printFunc("%d,%d\n", m_txMailbox, HAL_CAN_IsTxMessagePending(&hcan, m_txMailbox));
+            // m_printFunc("%d,%d\n", m_txMailbox, HAL_CAN_IsTxMessagePending(&m_canHandle, m_txMailbox));
             result = true;
         }
     }
@@ -116,28 +201,35 @@ bool CanInterfaceStm32::receive(CanMessage &frame, uint16_t timeoutINms)
     bool result{false};
     CAN_RxHeaderTypeDef rxHeader;
     uint8_t data[8];
-    if (HAL_CAN_GetRxFifoFillLevel(&hcan, CAN_RX_FIFO0) != 0)
+    uint32_t currentTimeINms = HAL_GetTick();
+    do
     {
-        if (HAL_CAN_GetRxMessage(&hcan, CAN_RX_FIFO0, &rxHeader, data) == HAL_OK)
+        if (HAL_CAN_GetRxFifoFillLevel(&m_canHandle, CAN_RX_FIFO0) != 0)
         {
-            frame.extd = CAN_ID_EXT == rxHeader.IDE ? 1 : 0;
-            frame.identifier = CAN_ID_EXT == rxHeader.IDE ? rxHeader.ExtId : rxHeader.StdId;
-            frame.data_length_code = rxHeader.DLC;
-            memcpy(&frame.data[0], data, 8);
-            result = true;
+            if (HAL_CAN_GetRxMessage(&m_canHandle, CAN_RX_FIFO0, &rxHeader, data) == HAL_OK)
+            {
+                frame.extd = CAN_ID_EXT == rxHeader.IDE ? 1 : 0;
+                frame.identifier = CAN_ID_EXT == rxHeader.IDE ? rxHeader.ExtId : rxHeader.StdId;
+                frame.data_length_code = rxHeader.DLC;
+                memcpy(&frame.data[0], data, 8);
+                result = true;
+                break;
+            }
+        }
+        else if (HAL_CAN_GetRxFifoFillLevel(&m_canHandle, CAN_RX_FIFO1) != 0)
+        {
+            if (HAL_CAN_GetRxMessage(&m_canHandle, CAN_RX_FIFO1, &rxHeader, data) == HAL_OK)
+            {
+                frame.extd = CAN_ID_EXT == rxHeader.IDE ? 1 : 0;
+                frame.identifier = CAN_ID_EXT == rxHeader.IDE ? rxHeader.ExtId : rxHeader.StdId;
+                frame.data_length_code = rxHeader.DLC;
+                memcpy(&frame.data[0], data, 8);
+                result = true;
+                break;
+            }
         }
     }
-    else if (HAL_CAN_GetRxFifoFillLevel(&hcan, CAN_RX_FIFO1) != 0)
-    {
-        if (HAL_CAN_GetRxMessage(&hcan, CAN_RX_FIFO1, &rxHeader, data) == HAL_OK)
-        {
-            frame.extd = CAN_ID_EXT == rxHeader.IDE ? 1 : 0;
-            frame.identifier = CAN_ID_EXT == rxHeader.IDE ? rxHeader.ExtId : rxHeader.StdId;
-            frame.data_length_code = rxHeader.DLC;
-            memcpy(&frame.data[0], data, 8);
-            result = true;
-        }
-    }
+    while((currentTimeINms + (uint32_t)timeoutINms) > HAL_GetTick());
     return result;
 }
 
@@ -162,30 +254,89 @@ void CanInterfaceStm32::canReceiveInterrupt(CAN_RxHeaderTypeDef &frameHeader, ui
 
 void CanInterfaceStm32::errorHandling()
 {
-    if (HAL_CAN_GetError(&hcan))
+    // if (HAL_CAN_GetError(&m_canHandle))
+    // {
+    //     m_printFunc("%d\n", HAL_CAN_GetError(&m_canHandle));
+    //     HAL_CAN_ResetError(&m_canHandle);
+    // }
+}
+
+// void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
+// {
+// }
+
+// void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
+// {
+// }
+
+// void HAL_CAN_TxMailbox0AbortCallback(CAN_HandleTypeDef *hcan)
+// {
+// }
+
+// void HAL_CAN_TxMailbox1AbortCallback(CAN_HandleTypeDef *hcan)
+// {
+// }
+
+void CanInterfaceStm32::CanMspInit(CAN_HandleTypeDef *hcan)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    if (hcan->Instance == CAN1)
     {
-        m_printFunc("%d\n", HAL_CAN_GetError(&hcan));
-        HAL_CAN_ResetError(&hcan);
+        /* CAN1 clock enable */
+        __HAL_RCC_CAN1_CLK_ENABLE();
+
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+        /**CAN GPIO Configuration
+        PA11     ------> CAN_RX
+        PA12     ------> CAN_TX
+        */
+        GPIO_InitStruct.Pin = GPIO_PIN_11;
+        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+        GPIO_InitStruct.Pin = GPIO_PIN_12;
+        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+        /* CAN1 interrupt Init */
+        HAL_NVIC_SetPriority(USB_HP_CAN1_TX_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(USB_HP_CAN1_TX_IRQn);
+        HAL_NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn);
+        HAL_NVIC_SetPriority(CAN1_RX1_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(CAN1_RX1_IRQn);
+        HAL_NVIC_SetPriority(CAN1_SCE_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(CAN1_SCE_IRQn);
+
+        /* Exit from sleep mode */
+        CLEAR_BIT(hcan->Instance->MCR, CAN_MCR_SLEEP);
     }
 }
 
-void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
+void CanInterfaceStm32::CanMspDeInit(CAN_HandleTypeDef *hcan)
 {
+    if (hcan->Instance == CAN1)
+    {
+        /* Peripheral clock disable */
+        __HAL_RCC_CAN1_CLK_DISABLE();
+
+        /**CAN GPIO Configuration
+        PA11     ------> CAN_RX
+        PA12     ------> CAN_TX
+        */
+        HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11 | GPIO_PIN_12);
+
+        /* CAN1 interrupt Deinit */
+        HAL_NVIC_DisableIRQ(USB_HP_CAN1_TX_IRQn);
+        HAL_NVIC_DisableIRQ(USB_LP_CAN1_RX0_IRQn);
+        HAL_NVIC_DisableIRQ(CAN1_RX1_IRQn);
+        HAL_NVIC_DisableIRQ(CAN1_SCE_IRQn);
+    }
 }
 
-void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
-{
-}
-
-void HAL_CAN_TxMailbox0AbortCallback(CAN_HandleTypeDef *hcan)
-{
-}
-
-void HAL_CAN_TxMailbox1AbortCallback(CAN_HandleTypeDef *hcan)
-{
-}
-
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+void CanInterfaceStm32::rxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     CAN_RxHeaderTypeDef rxHeader;
     uint8_t data[8];
@@ -202,7 +353,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     }
 }
 
-void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
+void CanInterfaceStm32::rxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     CAN_RxHeaderTypeDef rxHeader;
     uint8_t data[8];
