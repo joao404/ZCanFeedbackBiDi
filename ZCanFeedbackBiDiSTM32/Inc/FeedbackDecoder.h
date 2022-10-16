@@ -121,6 +121,7 @@ protected:
     {
         gpioPin pin;
         bool state;
+        bool changeReported;
         std::array<uint16_t, 4> adress;
         unsigned long lastChangeTimeINms;
     } TrackData;

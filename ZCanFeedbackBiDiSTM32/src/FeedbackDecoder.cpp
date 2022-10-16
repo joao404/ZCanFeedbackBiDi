@@ -68,6 +68,7 @@ FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(v
     {
         m_trackData[i].pin = trackPin[i];
         memset(m_trackData[i].adress.begin(), 0, sizeof(TrackData::adress));
+        m_trackData[i].changeReported = true; // first report is already done
     }
 }
 
@@ -81,7 +82,7 @@ void FeedbackDecoder::begin()
     {
         // memory not set before
         // write default values
-        uint32_t timeINus = get_DWT_us();
+        uint32_t timeINus = micros();
         if (timeINus > (uint32_t)(modulNidMax - modulNidMin))
         {
             m_modulConfig.networkId = modulNidMin + std::max((uint32_t)1, (timeINus / 8));
@@ -107,8 +108,11 @@ void FeedbackDecoder::begin()
     m_buildDate = (year << 16) | (month << 8) | day;
     m_printFunc("SW Version: 0x%08X, build date: 0x%08X\n", m_firmwareVersion, m_buildDate);
     m_printFunc("NetworkId %x MA %x CH2 %x\n", m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
+    m_printFunc("trackSetCurrentINmA: %d\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
+    m_printFunc("trackFreeToSetTimeINms: %d\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
+    m_printFunc("trackSetToFreeTimeINms: %d\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
 
-    m_pingJitterINms = std::max((uint32_t)0, std::min((get_DWT_us() / 10), (uint32_t)100));
+    m_pingJitterINms = std::max((uint32_t)0, std::min((micros() / 10), (uint32_t)100));
     m_pingIntervalINms = (9990 - m_pingJitterINms);
 
     ZCanInterfaceObserver::begin();
@@ -139,11 +143,17 @@ void FeedbackDecoder::begin()
     {
         for (uint8_t port = 0; port < m_trackData.size(); ++port)
         {
+            GPIO_InitTypeDef GPIO_InitStruct = {0};
+            GPIO_InitStruct.Pin = m_trackData[port].pin.pin;
+            GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+            GPIO_InitStruct.Pull = GPIO_PULLUP;
+            HAL_GPIO_Init(m_trackData[port].pin.bank, &GPIO_InitStruct);
             // this is done outside of FeedbackDecoder
             // pinMode(m_trackData[port].pin, INPUT_PULLUP);
             m_trackData[port].state = (GPIO_PIN_SET == HAL_GPIO_ReadPin(m_trackData[port].pin.bank, m_trackData[port].pin.pin));
             notifyBlockOccupied(port, 0x01, m_trackData[port].state);
             m_trackData[port].lastChangeTimeINms = HAL_GetTick();
+            m_printFunc("port: %d state:%d\n", port, m_trackData[port].state);
         }
     }
 
@@ -151,7 +161,7 @@ void FeedbackDecoder::begin()
     // pinMode(m_configIdPin, INPUT_PULLUP);
 
     // Wait random time before starting logging to Z21
-    DWT_Delay_us(get_DWT_us());
+    microsDelay(micros());
 
     // Send first ping
     sendPing(m_masterId, m_modulType, m_sessionId);
@@ -186,21 +196,30 @@ void FeedbackDecoder::cyclic()
         bool state = (GPIO_PIN_SET == HAL_GPIO_ReadPin(m_trackData[port].pin.bank, m_trackData[port].pin.pin));
         if (state != m_trackData[port].state)
         {
+            m_trackData[port].changeReported = false;
+            m_trackData[port].state = state;
+            m_trackData[port].lastChangeTimeINms = currentTimeINms;
+        }
+        if (!m_trackData[port].changeReported)
+        {
             if (state)
             {
                 if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
                 {
+                    m_trackData[port].changeReported = true;
                     notifyBlockOccupied(port, 0x01, state);
+                    m_printFunc("port: %d state:%d\n", port, state);
                 }
             }
             else
             {
                 if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
                 {
+                    m_trackData[port].changeReported = true;
                     notifyBlockOccupied(port, 0x01, state);
+                    m_printFunc("port: %d state:%d\n", port, state);
                 }
             }
-            m_trackData[port].lastChangeTimeINms = currentTimeINms;
         }
     }
 }

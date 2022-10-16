@@ -24,6 +24,7 @@
 #include "FeedbackDecoder.h"
 #include "Helper/xprintf.h"
 #include "Helper/micros.h"
+#include "Dcc.h"
 #include <vector>
 #include <memory>
 
@@ -75,7 +76,29 @@ bool hasRailcom{false};
 FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, flashWriteData, trackPin1, hasRailcom,
                                  {GPIOB, GPIO_PIN_0}, {GPIOB, GPIO_PIN_1}, true, true, xprintf);
 
-unsigned long lastCanCmdSendINms = 0;
+Dcc dcc([]() -> bool
+        { return (HAL_GPIO_ReadPin(dccInput_GPIO_Port, dccInput_Pin) == GPIO_PinState::GPIO_PIN_SET); });
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == dccInput_Pin)
+  {
+    // HAL_GPIO_TogglePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin);
+    // dcc.interruptHandler();
+  }
+}
+
+void notifyDccAccTurnoutOutput(uint16_t Addr, uint8_t Direction, uint8_t OutputPower)
+{
+  xprintf("notifyDccAccTurnoutOutput: %u\n", Addr);
+  feedbackDecoder1.callbackAccAddrReceived(Addr);
+}
+
+void notifyDccLoco(uint16_t addr, Dcc::AddrType addrType)
+{
+  xprintf("notifyDccLoco: %u\n", addr);
+  feedbackDecoder1.callbackLocoAddrReceived(addr);
+}
 
 int main(void)
 {
@@ -83,16 +106,15 @@ int main(void)
   xdev_out(uart_putc);
   HAL_Init();
   SystemClock_Config();
-  if(DWT_Delay_Init())
+  if (microsInit())
   {
-    xprintf("Error DWT_Delay_Init()\n");
+    xprintf("Error microsInit()\n");
   }
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_DMA_Init();
   MX_ADC1_Init();
-  xprintf("ZCAN 10808 Systemfrequenz: %lu\n", HAL_RCC_GetSysClockFreq());
-  xprintf("CAN initalized\n");
+  xprintf("ZCAN Feedback Decoder system frequency: %lu\n", HAL_RCC_GetSysClockFreq());
   // Calibrate The ADC On Power-Up For Better Accuracy
   HAL_ADCEx_Calibration_Start(&hadc1);
 
@@ -110,16 +132,25 @@ int main(void)
 
   feedbackDecoder1.begin();
 
+  dcc.setNotifyDccAccTurnoutOutput(notifyDccAccTurnoutOutput);
+  dcc.setNotifyDccLoco(notifyDccLoco);
+
+  dcc.begin();
+
   while (1)
   {
+    static unsigned long lastBlinkTimeINms = 0;
+
     canInterface->cyclic();
     feedbackDecoder1.cyclic();
     unsigned long currentTimeINms{HAL_GetTick()};
-    if ((lastCanCmdSendINms + 1000) < currentTimeINms)
+    if ((lastBlinkTimeINms + 1000) < currentTimeINms)
     {
-        HAL_GPIO_TogglePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin);
-        lastCanCmdSendINms = currentTimeINms;
+      HAL_GPIO_TogglePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin);
+      lastBlinkTimeINms = currentTimeINms;
     }
+
+    dcc.cyclic();
 
     // Start ADC Conversion
     // Pass (The ADC Instance, Result Buffer Address, Buffer Length)
@@ -199,9 +230,9 @@ bool flashWriteData(void)
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+ * @brief System Clock Configuration
+ * @retval None
+ */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -209,8 +240,8 @@ void SystemClock_Config(void)
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+   * in the RCC_OscInitTypeDef structure.
+   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -224,9 +255,8 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
@@ -244,7 +274,7 @@ void SystemClock_Config(void)
   }
 
   /** Enables the Clock Security System
-  */
+   */
   HAL_RCC_EnableCSS();
 }
 
@@ -253,9 +283,9 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -267,14 +297,14 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

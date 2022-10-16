@@ -2,12 +2,12 @@
 #include "Helper/micros.h"
  
 /**
- * @brief Initializes DWT_Clock_Cycle_Count for DWT_Delay_us function
+ * @brief Initializes DWT_Clock_Cycle_Count for microsDelay function
  * @return Error DWT counter
  * 1: clock cycle counter not started
  * 0: clock cycle counter works
  */
-uint32_t DWT_Delay_Init(void) {
+uint32_t microsInit(void) {
 
   // Disable TRC
   CoreDebug->DEMCR &= ~CoreDebug_DEMCR_TRCENA_Msk; // ~0x01000000;

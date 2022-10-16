@@ -1,3 +1,18 @@
+/*********************************************************************
+ * micros
+ *
+ * Copyright (C) 2022 Marcel Maage
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * LICENSE file for more details.
+ */
 
 #pragma once
 
@@ -6,18 +21,18 @@
 
 //#include "stm32yyxx_hal.h"
 /**
- * @brief Initializes DWT_Cycle_Count for DWT_Delay_us function
+ * @brief Initializes DWT_Cycle_Count for microsDelay function
  * @return Error DWT counter
  * 1: DWT counter Error
  * 0: DWT counter works
  */
-uint32_t DWT_Delay_Init(void);
+uint32_t microsInit(void);
  
 /**
  * @brief This function provides a delay (in microseconds)
  * @param microseconds: delay in microseconds
  */
-static inline void DWT_Delay_us(volatile uint32_t microseconds)
+static inline void microsDelay(volatile uint32_t microseconds)
 {
   uint32_t clk_cycle_start = DWT->CYCCNT;
   // Go to number of cycles for system
@@ -31,7 +46,7 @@ static inline void DWT_Delay_us(volatile uint32_t microseconds)
  * @param microseconds: delay in microseconds
  * @param clk_cycle_start: starttime in ticks from get_DWT_tick()
  */
-static inline void DWT_Delay_us(volatile uint32_t microseconds, volatile uint32_t clk_cycle_start)
+static inline void microsDelay(volatile uint32_t microseconds, volatile uint32_t clk_cycle_start)
 {
   // uint32_t clk_cycle_start = DWT->CYCCNT;
   // Go to number of cycles for system
@@ -44,7 +59,7 @@ static inline void DWT_Delay_us(volatile uint32_t microseconds, volatile uint32_
  * @brief This function provides the actual counter value (in microseconds)
  * @return counter value in microsecons
  */
-static inline uint32_t get_DWT_us(void)
+static inline uint32_t micros(void)
 {
   return ( DWT->CYCCNT / (HAL_RCC_GetHCLKFreq() / 1000000) );
 }

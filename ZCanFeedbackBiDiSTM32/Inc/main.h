@@ -79,6 +79,16 @@ void Error_Handler(void);
 #define configRailcom_GPIO_Port GPIOB
 #define configNetworkId_Pin GPIO_PIN_1
 #define configNetworkId_GPIO_Port GPIOB
+#define dccInput_Pin GPIO_PIN_8
+#define dccInput_GPIO_Port GPIOA
+#define usartTx_Pin GPIO_PIN_9
+#define usartTx_GPIO_Port GPIOA
+#define usartRx_Pin GPIO_PIN_10
+#define usartRx_GPIO_Port GPIOA
+#define canRx_Pin GPIO_PIN_11
+#define canRx_GPIO_Port GPIOA
+#define canTx_Pin GPIO_PIN_12
+#define canTx_GPIO_Port GPIOA
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

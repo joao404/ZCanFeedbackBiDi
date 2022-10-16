@@ -1,5 +1,5 @@
 /*********************************************************************
- * Feedback Decoder
+ * Railcom
  *
  * Copyright (C) 2022 Marcel Maage
  *
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <Arduino.h>
+#include "main.h"
 
 class Railcom
 {
