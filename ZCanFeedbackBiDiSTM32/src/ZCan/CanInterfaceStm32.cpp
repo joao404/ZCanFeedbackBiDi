@@ -65,7 +65,7 @@ void CanInterfaceStm32::begin()
     }
 
     m_canHandle.Instance = CAN1;
-    m_canHandle.Init.Prescaler = 18;
+    m_canHandle.Init.Prescaler = 14;
     m_canHandle.Init.Mode = CAN_MODE_NORMAL;
     m_canHandle.Init.SyncJumpWidth = CAN_SJW_1TQ;
     m_canHandle.Init.TimeSeg1 = CAN_BS1_13TQ;

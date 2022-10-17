@@ -39,6 +39,7 @@
 #include "Helper/micros.h"
 #include <algorithm>
 #include <cstring>
+#include "adc.h"
 
 FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<gpioPin, 8> &trackPin, bool hasRailcom,
                                  gpioPin configRailcomPin, gpioPin configIdPin, bool debug, bool zcanDebug, void (*printFunc)(const char *, ...))
@@ -57,6 +58,10 @@ FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(v
       m_pingIntervalINms(0),
       m_masterId(0x0),
       m_sessionId(0x0),
+      m_currentRailcomPort(0),
+      m_currentMeasurementPerPort(0),
+      m_maxNumberOfConsecutiveMeasurements(4),
+      m_processingRailcomData(false),
       m_modulConfig(modulConfig),
       m_firmwareVersion(0x05010014), // 5.1.20
       m_buildDate(0x07E60917),       // 23.09.2022
@@ -106,6 +111,10 @@ void FeedbackDecoder::begin()
     uint32_t month = BUILDTM_MONTH;
     uint32_t year = BUILDTM_YEAR;
     m_buildDate = (year << 16) | (month << 8) | day;
+    // 3300mV per 4096 bits is 0.8mVperCount
+    // I have a 22 Ohm resistor so 0.8mV per Count * 22 * current is offset down below
+    // so I take 8*22 = 17,6 is round about 18
+    m_trackSetVoltage = 18 * m_modulConfig.trackConfig.trackSetCurrentINmA;
     m_printFunc("SW Version: 0x%08X, build date: 0x%08X\n", m_firmwareVersion, m_buildDate);
     m_printFunc("NetworkId %x MA %x CH2 %x\n", m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
     m_printFunc("trackSetCurrentINmA: %d\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
@@ -119,15 +128,55 @@ void FeedbackDecoder::begin()
 
     if (m_hasRailcom)
     {
-        // HAL_GPIO_TogglePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin);
         //  this is done outside of FeedbackDecoder
-        //  pinMode(m_configRailcomPin, INPUT_PULLUP);
-
         if (GPIO_PIN_RESET == HAL_GPIO_ReadPin(m_configRailcomPin.bank, m_configRailcomPin.pin))
         {
+            ADC_ChannelConfTypeDef sConfig = {0};
+            hadc1.Instance = ADC1;
+            hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+            hadc1.Init.ContinuousConvMode = DISABLE;
+            hadc1.Init.DiscontinuousConvMode = DISABLE;
+            hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+            hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+            hadc1.Init.NbrOfConversion = 1;
+            if (HAL_ADC_Init(&hadc1) != HAL_OK)
+            {
+                Error_Handler();
+            }
             // read current values of adcs as default value
+            for (uint8_t port = 0; port < m_trackData.size(); ++port)
+            {
+                sConfig.Channel = m_trackData[port].pin.adcChannel;
+                sConfig.Rank = ADC_REGULAR_RANK_1;
+                sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+                if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+                {
+                    Error_Handler();
+                }
+                // Start ADC Conversion
+                HAL_ADC_Start(&hadc1);
+                // Poll ADC1 Perihperal & TimeOut = 1mSec
+                HAL_ADC_PollForConversion(&hadc1, 1);
+                // Read The ADC Conversion Result & Map It To PWM DutyCycle
+                m_trackData[port].voltageOffset = HAL_ADC_GetValue(&hadc1);
+                m_modulConfig.voltageOffset[port] = m_trackData[port].voltageOffset;
+            }
+            m_saveDataFkt();
+            // use default ADC function again
+            MX_ADC1_Init();
         }
 
+        ADC_ChannelConfTypeDef sConfig = {0};
+        sConfig.Channel = m_trackData[m_currentRailcomPort].pin.adcChannel;
+        sConfig.Rank = ADC_REGULAR_RANK_1;
+        sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+        if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+        {
+            m_printFunc("Channel config failed\n");
+            Error_Handler();
+        }
+
+        // TODO remove when functioning
         m_trackData[0].adress[0] = 0x8022;
         m_trackData[2].adress[0] = 0x0023;
         m_trackData[4].adress[0] = 0xC024;
@@ -153,7 +202,8 @@ void FeedbackDecoder::begin()
             m_trackData[port].state = (GPIO_PIN_SET == HAL_GPIO_ReadPin(m_trackData[port].pin.bank, m_trackData[port].pin.pin));
             notifyBlockOccupied(port, 0x01, m_trackData[port].state);
             m_trackData[port].lastChangeTimeINms = HAL_GetTick();
-            m_printFunc("port: %d state:%d\n", port, m_trackData[port].state);
+            if (m_debug)
+                m_printFunc("port: %d state:%d\n", port, m_trackData[port].state);
         }
     }
 
@@ -208,7 +258,8 @@ void FeedbackDecoder::cyclic()
                 {
                     m_trackData[port].changeReported = true;
                     notifyBlockOccupied(port, 0x01, state);
-                    m_printFunc("port: %d state:%d\n", port, state);
+                    if (m_debug)
+                        m_printFunc("port: %d state:%d\n", port, state);
                 }
             }
             else
@@ -217,10 +268,64 @@ void FeedbackDecoder::cyclic()
                 {
                     m_trackData[port].changeReported = true;
                     notifyBlockOccupied(port, 0x01, state);
-                    m_printFunc("port: %d state:%d\n", port, state);
+                    if (m_debug)
+                        m_printFunc("port: %d state:%d\n", port, state);
                 }
             }
         }
+    }
+
+    if (m_processingRailcomData)
+    {
+        // process Railcom data from ADC
+        // memory has size of 4096
+        // adc has 12mhz
+        // with 64mhz it would take 472us to fill half and 944 us to fill all
+        // with low frequency it would take 5ms
+        // in old sequence, one conversion is 230ns, no it takes around 1,22us
+        // with 14 mhz we would have sampling of 1,05us which would be better
+        // In that case we would need to run chip at 56mhz to have prescaler 4
+        // dies wäre möglich mit multiplikator 7
+        // da der buffer mit 4096 für 4ms reichen würde, das Fenster jedoch nur 450 us lang. Also reicht ein Buffer von
+        // 512 werten
+
+        // m_bitStreamDataBuffer;
+        auto iteratorBit = m_bitStreamDataBuffer.begin();
+        for (auto iteratorDma = m_adcDmaBuffer.begin(); iteratorDma != m_adcDmaBuffer.end(); iteratorDma++, iteratorBit++)
+        {
+            *iteratorBit = (abs(*iteratorDma - m_trackData[m_currentRailcomPort].voltageOffset) > m_trackSetVoltage);
+            m_printFunc("%d\n", *iteratorBit);
+        }
+
+        /*
+        byte data = RailComDecodeInData();   //read Railcom Data and decode Railcom Data
+      if (data < 0x40) {    //gültige Railcom Message empfangen
+            if (RailComReadFirst) {
+              RailComReadData = data;   //Save first Byte of Data
+              if ((data >> 2) < 3)  //app:pom, app:adr_low, app:adr_high -> read only 12 Bit!
+                RailComReadFirst = false;
+            }
+            else {
+              RailComReadFirst = true;
+              byte RailComID = RailComReadData >> 2; //Save ID
+              RailComReadData = (RailComReadData << 6) | data;    //first 2 Bit and add next 6 Bit
+              if (RailComID == 0) { //app:pom
+                  RailComCVTime = 25; //Reset Timer!
+                  RailComReadLastCV = RailComReadData;
+                  RailComCVRead = true;
+              }
+              else if (RailComID == 1) { //app:adr_high
+                RailComReadAdr = (RailComReadData << 8) | (RailComReadAdr & 0xFF);
+              }
+              else if (RailComID == 2) {  //app:adr_low
+                RailComReadAdr = (RailComReadAdr & 0xFF00) | RailComReadData;
+              }
+            }
+      }
+      else RailComReadFirst = true;
+      */
+
+        // m_processingRailcomData = false;
     }
 }
 
@@ -240,6 +345,34 @@ void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
     // start detection of Railcom
     if (m_hasRailcom)
     {
+        if (!m_processingRailcomData)
+        {
+            HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBuffer.begin(), sizeof(m_adcDmaBuffer));
+        }
+    }
+}
+
+void FeedbackDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
+{
+    m_processingRailcomData = true;
+    m_currentMeasurementPerPort++;
+    if (m_maxNumberOfConsecutiveMeasurements <= m_currentMeasurementPerPort)
+    {
+        m_currentMeasurementPerPort = 0;
+        m_currentRailcomPort++;
+    }
+    if (sizeof(m_trackData) <= m_currentRailcomPort)
+    {
+        m_currentRailcomPort = 0;
+    }
+    // after DMA was executed, configure next channel already to save time
+    ADC_ChannelConfTypeDef sConfig = {0};
+    sConfig.Channel = m_trackData[m_currentRailcomPort].pin.adcChannel;
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+    {
+        Error_Handler();
     }
 }
 
@@ -273,12 +406,14 @@ bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_
         {
             if (0x11 == type)
             {
-                m_printFunc("onAccessoryData\n");
+                if (m_debug)
+                    m_printFunc("onAccessoryData\n");
                 result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].adress[0], m_trackData[port].adress[1]);
             }
             else if (0x12 == type)
             {
-                m_printFunc("onAccessoryData\n");
+                if (m_debug)
+                    m_printFunc("onAccessoryData\n");
                 result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].adress[2], m_trackData[port].adress[3]);
             }
         }
@@ -296,7 +431,8 @@ bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8
             if (port < m_trackData.size())
             {
                 result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].state ? 0x1100 : 0x0100, 0);
-                m_printFunc("onAccessoryPort6\n");
+                if (m_debug)
+                    m_printFunc("onAccessoryPort6\n");
             }
         }
     }
@@ -308,7 +444,8 @@ bool FeedbackDecoder::onRequestModulInfo(uint16_t id, uint16_t type)
     bool result{false};
     if (id == m_networkId)
     {
-        m_printFunc("onRequestModulInfo\n");
+        if (m_debug)
+            m_printFunc("onRequestModulInfo\n");
         result = true;
         switch (type)
         {
@@ -362,7 +499,8 @@ bool FeedbackDecoder::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
     bool result{false};
     if (id == m_networkId)
     {
-        m_printFunc("onCmdModulInfo\n");
+        if (m_debug)
+            m_printFunc("onCmdModulInfo\n");
         result = true;
         switch (type)
         {
@@ -389,7 +527,8 @@ bool FeedbackDecoder::onRequestModulObjectConfig(uint16_t id, uint32_t tag)
     bool result{false};
     if (id == m_networkId)
     {
-        m_printFunc("onRequestModulObjectConfig\n");
+        if (m_debug)
+            m_printFunc("onRequestModulObjectConfig\n");
         uint16_t value{0};
         switch (tag)
         {
@@ -459,28 +598,36 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
         {
         case 0x00221001:
             m_modulConfig.sendChannel2Data = ((value & 0x0010) == 0x0010) ? 1 : 0;
-            m_printFunc("Write Send Channel 2 %u\n", m_modulConfig.sendChannel2Data);
+            if (m_debug)
+                m_printFunc("Write Send Channel 2 %u\n", m_modulConfig.sendChannel2Data);
             m_saveDataFkt();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         case 0x00401001:
             m_modulConfig.trackConfig.trackSetCurrentINmA = value;
-            m_printFunc("Write SetCurrent %u\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
+            m_trackSetVoltage = 18 * value;
+            if (m_debug)
+            {
+                m_printFunc("Write SetCurrent %u\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
+                m_printFunc("Write track set voltage %u\n", m_trackSetVoltage);
+            }
             m_saveDataFkt();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         case 0x00501001:
             m_modulConfig.trackConfig.trackFreeToSetTimeINms = value;
-            m_printFunc("Write FreeToSetTime %u\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
+            if (m_debug)
+                m_printFunc("Write FreeToSetTime %u\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
             m_saveDataFkt();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         case 0x00511001:
             m_modulConfig.trackConfig.trackSetToFreeTimeINms = value;
-            m_printFunc("Write SetToFreeTime %u\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
+            if (m_debug)
+                m_printFunc("Write SetToFreeTime %u\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
             m_saveDataFkt();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;

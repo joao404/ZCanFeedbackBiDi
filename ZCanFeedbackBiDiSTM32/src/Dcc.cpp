@@ -18,6 +18,7 @@
 
 #include "Dcc.h"
 #include <cstring>
+#include "Helper/xprintf.h"
 
 Dcc::Dcc(bool (*pinIsSet)(void))
     : m_state(Idle),
@@ -76,9 +77,13 @@ void Dcc::interruptHandler(void)
     m_timeSinceLastRisingEdgeINus = currentTimeINus; // 16MHz = resolution of four microseconds
     return;
   }
+
   if (m_getData == true)
+  {
     m_bitCount += 1; // Abzählen der Bytes, also jeweils 8 Bit
-  if (currentTimeINus - m_timeSinceLastRisingEdgeINus < 75)
+  }
+
+  if (currentTimeINus <= (m_timeSinceLastRisingEdgeINus + 85))
   {                     // 1-Bit gelesen; over 68us
     m_numberOfOne += 1; // Zählen der 1-Bit für Präambel erforderlich
     if (m_getData == true && m_bitCount <= 8)
@@ -91,19 +96,18 @@ void Dcc::interruptHandler(void)
       m_numberOfOne = 0;
       m_getData = false; // Stop des Einlesen der Daten
       // XOR Prüfen:
-      if (m_dataBuf[m_dataLength] != m_xorChecksum) // Prüfen von XOR und letztes Byte
-        return;                                     // verwerfen!
-      //      while (datalength < 4) {  //Löschen des leeren Bereichs am Ende
-      //        datalength++;
-      //        data[datalength] = 0;
-      //      }
-      m_dataReady = true; // Fertig, Daten Auswerten!
-      processData();
-      m_dataReady = false;
+      if (m_dataBuf[m_dataLength] == m_xorChecksum && m_dataBuf[0] != 0xFF) // Prüfen von XOR und letztes Byte
+      {
+        m_dataReady = true; // Fertig, Daten Auswerten!
+        processData();
+        m_dataReady = false;
+      }
     }
+        // xprintf("1");
   } // Ende 1-Bit
   else
   { // 0-Bit gelesen
+    // xprintf("0");
     if (m_getData == true && m_bitCount <= 8)
     {                                                      // eingelesenen Bitwert im Array Speichern
       m_dataBuf[m_dataLength] &= ~(1 << (8 - m_bitCount)); // Speichert das ein 0-Bit gelesen wurde
@@ -137,6 +141,7 @@ void Dcc::setNotifyDccLoco(void (*notifyDccLoco)(uint16_t addr, Dcc::AddrType ad
 
 void Dcc::processData(void)
 {
+  xprintf("%d %d %d %d\n", m_dataBuf[0], m_dataBuf[1], m_dataBuf[2], m_dataBuf[3]);
   /*
   Beschreibung der Einträge im data Array:
     data[0]   : 1. Byte nach der Präambel (Adresse)

@@ -81,6 +81,7 @@ void Error_Handler(void);
 #define configNetworkId_GPIO_Port GPIOB
 #define dccInput_Pin GPIO_PIN_8
 #define dccInput_GPIO_Port GPIOA
+#define dccInput_EXTI_IRQn EXTI9_5_IRQn
 #define usartTx_Pin GPIO_PIN_9
 #define usartTx_GPIO_Port GPIOA
 #define usartRx_Pin GPIO_PIN_10

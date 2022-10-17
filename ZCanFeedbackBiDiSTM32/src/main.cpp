@@ -27,6 +27,7 @@
 #include "Dcc.h"
 #include <vector>
 #include <memory>
+#include <stm32f1xx_hal_gpio.h>
 
 void SystemClock_Config(void);
 
@@ -61,20 +62,33 @@ typedef struct
 
 MemoryData memoryData;
 
-std::array<FeedbackDecoder::gpioPin, 8> trackPin1{{{GPIOA, GPIO_PIN_0},
-                                                   {GPIOA, GPIO_PIN_1},
-                                                   {GPIOA, GPIO_PIN_2},
-                                                   {GPIOA, GPIO_PIN_3},
-                                                   {GPIOA, GPIO_PIN_4},
-                                                   {GPIOA, GPIO_PIN_5},
-                                                   {GPIOA, GPIO_PIN_6},
-                                                   {GPIOA, GPIO_PIN_7}}};
+std::array<FeedbackDecoder::gpioPin, 8> trackPin1{{{GPIOA, GPIO_PIN_0, ADC_CHANNEL_0},
+                                                   {GPIOA, GPIO_PIN_1, ADC_CHANNEL_1},
+                                                   {GPIOA, GPIO_PIN_2, ADC_CHANNEL_2},
+                                                   {GPIOA, GPIO_PIN_3, ADC_CHANNEL_3},
+                                                   {GPIOA, GPIO_PIN_4, ADC_CHANNEL_4},
+                                                   {GPIOA, GPIO_PIN_5, ADC_CHANNEL_5},
+                                                   {GPIOA, GPIO_PIN_6, ADC_CHANNEL_6},
+                                                   {GPIOA, GPIO_PIN_7, ADC_CHANNEL_7}}};
 
-bool hasRailcom{false};
+bool hasRailcom{true};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
 FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, flashWriteData, trackPin1, hasRailcom,
-                                 {GPIOB, GPIO_PIN_0}, {GPIOB, GPIO_PIN_1}, true, true, xprintf);
+                                 {configRailcom_GPIO_Port, configRailcom_Pin}, {configNetworkId_GPIO_Port, configNetworkId_Pin}, true, false, xprintf);
+
+// Called when first half of buffer is filled
+void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  HAL_GPIO_WritePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin, GPIO_PIN_SET);
+}
+
+// Called when buffer is completely filled
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  HAL_GPIO_WritePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin, GPIO_PIN_RESET);
+  feedbackDecoder1.callbackAdcReadFinished(hadc);
+}
 
 Dcc dcc([]() -> bool
         { return (HAL_GPIO_ReadPin(dccInput_GPIO_Port, dccInput_Pin) == GPIO_PinState::GPIO_PIN_SET); });
@@ -83,8 +97,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == dccInput_Pin)
   {
-    // HAL_GPIO_TogglePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin);
-    // dcc.interruptHandler();
+    dcc.interruptHandler();
   }
 }
 
@@ -146,7 +159,7 @@ int main(void)
     unsigned long currentTimeINms{HAL_GetTick()};
     if ((lastBlinkTimeINms + 1000) < currentTimeINms)
     {
-      HAL_GPIO_TogglePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin);
+      // HAL_GPIO_TogglePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin);
       lastBlinkTimeINms = currentTimeINms;
     }
 
@@ -202,10 +215,6 @@ bool flashWriteData(void)
     return false;
   }
 
-  // uint64_t FData = 0x1A2B3C4D5E6F1234;		// Initialize the data to be written into the flash memory
-
-  // HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD,0x0801FC00, FData);  // Calling the HAL function to write the at data at the given memory address
-
   uint32_t memoryAdress = START_ADDRESS_MEMORY;
   uint16_t *dataPtr = (uint16_t *)(&memoryData);
   for (uint16_t i = 0; i < sizeof(memoryData); i += 2)
@@ -248,7 +257,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -267,7 +276,7 @@ void SystemClock_Config(void)
     Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV4;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();

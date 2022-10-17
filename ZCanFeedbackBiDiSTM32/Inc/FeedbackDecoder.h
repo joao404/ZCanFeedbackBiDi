@@ -37,12 +37,14 @@ public:
         uint16_t sendChannel2Data;
         // std::array<TrackConfig, 8> trackConfig;
         TrackConfig trackConfig;
+        std::array<uint16_t, 8> voltageOffset;
     } ModulConfig;
 
-    typedef struct 
+    typedef struct
     {
         GPIO_TypeDef *bank;
         uint16_t pin;
+        uint32_t adcChannel;
     } gpioPin;
 
     FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<gpioPin, 8> &trackPin, bool hasRailcom,
@@ -56,6 +58,8 @@ public:
     void callbackAccAddrReceived(uint16_t addr);
 
     void callbackLocoAddrReceived(uint16_t addr);
+
+    void callbackAdcReadFinished(ADC_HandleTypeDef *hadc);
 
 protected:
     virtual void onIdenticalNetworkId() override;
@@ -123,10 +127,25 @@ protected:
         bool state;
         bool changeReported;
         std::array<uint16_t, 4> adress;
+        uint16_t voltageOffset;
         unsigned long lastChangeTimeINms;
     } TrackData;
 
     std::array<TrackData, 8> m_trackData;
+
+    uint8_t m_currentRailcomPort;
+
+    uint8_t m_currentMeasurementPerPort;
+
+    const uint8_t m_maxNumberOfConsecutiveMeasurements;
+
+    std::array<uint16_t, 512> m_adcDmaBuffer;
+
+    std::array<bool, 512> m_bitStreamDataBuffer;
+
+    uint16_t m_trackSetVoltage;
+
+    bool m_processingRailcomData;
 
 private:
     ModulConfig &m_modulConfig;
