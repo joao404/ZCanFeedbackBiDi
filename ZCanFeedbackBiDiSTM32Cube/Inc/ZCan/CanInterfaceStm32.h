@@ -28,7 +28,7 @@ public:
 
     static std::shared_ptr<CanInterfaceStm32> createInstance(bool useInterrupt, void (*printFunc)(const char *, ...));
 
-    static CanInterfaceStm32* getInstance();
+    static std::shared_ptr<CanInterfaceStm32> getInstance(){return m_instance};
 
     void begin() override;
 

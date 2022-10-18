@@ -1,4 +1,4 @@
-# ZCanFeedbackBiDiSTM32
+# ZCanFeedbackBiDiSTM32Arduino
 Feedback decoder for BiDi with ZCan interface to Z21 based on STM32
 
 This project is based on the work of:

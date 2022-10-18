@@ -66,7 +66,7 @@ void setup()
 
   if (hasRailcom)
   {
-    pinMode(m_dccPin, OUTPUT);
+    pinMode(m_dccPin, INPUT);
     m_dcc.pin(m_dccPin, 0);
     m_dcc.init(MAN_ID_DIY, 10, CV29_ACCESSORY_DECODER | CV29_OUTPUT_ADDRESS_MODE, 0);
   }
