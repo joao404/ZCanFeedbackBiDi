@@ -20,6 +20,7 @@
 #include "FeedbackDecoder.h"
 #include "Helper/xprintf.h"
 #include "NmraDcc.h"
+#include "Flash.h"
 #include <vector>
 #include <memory>
 
@@ -28,12 +29,7 @@ void uart_putc(uint8_t d)
   Serial.print((char)d);
 }
 
-#define START_ADDRESS_MEMORY 0x0800FC00
-
 std::shared_ptr<CanInterfaceStm32> canInterface = CanInterfaceStm32::createInstance(false, xprintf);
-
-void flashReadData(void);
-bool flashWriteData(void);
 
 typedef struct
 {
@@ -43,6 +39,8 @@ typedef struct
 
 MemoryData memoryData;
 
+Flash flash(&memoryData, sizeof(MemoryData));
+
 std::array<int, 8> trackPin1{PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7};
 
 bool hasRailcom{false};
@@ -50,7 +48,7 @@ int configRailcomPin = PB0;
 int configIdPin = PB1;
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
-FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, flashWriteData, trackPin1, hasRailcom,
+FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, hasRailcom,
                                  configRailcomPin, configIdPin, true, false, xprintf);
 
 // Called when first half of buffer is filled
@@ -89,7 +87,7 @@ void setup()
     xprintf("ERROR: No can interface defined\n");
   }
 
-  flashReadData();
+  Flash::readData();
 
   feedbackDecoder1.begin();
 
@@ -122,64 +120,6 @@ void notifyDccSpeed(uint16_t Addr, DCC_ADDR_TYPE AddrType, uint8_t Speed, DCC_DI
 {
   // Serial.printf("notifyDccSpeed: %u\n", Addr);
   feedbackDecoder1.callbackLocoAddrReceived(Addr);
-}
-
-void flashReadData(void)
-{
-  uint16_t *memoryPtr = (uint16_t *)START_ADDRESS_MEMORY;
-  uint16_t *dataPtr = (uint16_t *)(&memoryData);
-  for (uint16_t i = 0; i < sizeof(memoryData); i += 2)
-  {
-    *dataPtr = *(__IO uint16_t *)memoryPtr;
-    memoryPtr++;
-    dataPtr++;
-  }
-}
-
-bool flashWriteData(void)
-{
-
-  static FLASH_EraseInitTypeDef eraseInitStruct{0};
-
-  /* Unlock the Flash to enable the flash control register access *************/
-  HAL_FLASH_Unlock();
-
-  /* Erase the user Flash area */
-
-  /* Fill EraseInit structure*/
-  eraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGES;
-  eraseInitStruct.PageAddress = START_ADDRESS_MEMORY; // Starting address of flash page (0x0800 0000 - 0x0801 FC00)
-  eraseInitStruct.NbPages = 1;                        // The number of pages to be erased
-
-  uint32_t errorStatus = 0;
-
-  if (HAL_FLASHEx_Erase(&eraseInitStruct, &errorStatus) != HAL_OK)
-  {
-    xprintf("%d\n", HAL_FLASH_GetError());
-    return false;
-  }
-
-  uint32_t memoryAdress = START_ADDRESS_MEMORY;
-  uint16_t *dataPtr = (uint16_t *)(&memoryData);
-  for (uint16_t i = 0; i < sizeof(memoryData); i += 2)
-  {
-    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, memoryAdress, *dataPtr) == HAL_OK)
-    {
-      memoryAdress += 2; // use StartPageAddress += 2 for half word and 8 for double word
-      dataPtr++;
-    }
-    else
-    {
-      /* Error occurred while writing data in Flash memory*/
-      xprintf("%d\n", HAL_FLASH_GetError());
-      return false;
-    }
-  }
-
-  /* Lock the Flash to disable the flash control register access (recommended
-     to protect the FLASH memory against possible unwanted operation) *********/
-  HAL_FLASH_Lock();
-  return true;
 }
 
 extern "C" void SystemClock_Config(void)
