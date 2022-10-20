@@ -198,7 +198,6 @@ void FeedbackDecoder::begin()
             m_trackData[port].state = digitalRead(m_trackData[port].pin);
             notifyBlockOccupied(port, 0x01, m_trackData[port].state);
             m_trackData[port].lastChangeTimeINms = millis();
-            delay(10);
             if (m_debug)
                 m_printFunc("port: %d state:%d\n", port, m_trackData[port].state);
         }

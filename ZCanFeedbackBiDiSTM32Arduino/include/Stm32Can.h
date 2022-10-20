@@ -21,35 +21,53 @@
 class Stm32Can
 {
 public:
-  // register addresses
-  constexpr static uint32_t CanBase = 0x40006400;
+  typedef struct
+  {
+    volatile uint32_t TIR;
+    volatile uint32_t TDTR;
+    volatile uint32_t TDLR;
+    volatile uint32_t TDHR;
+  } TxMailbox;
 
-  constexpr static uint32_t MCR = CanBase + 0x000;  // master cntrl
-  constexpr static uint32_t MSR = CanBase + 0x004;  // rx status
-  constexpr static uint32_t TSR = CanBase + 0x008;  // tx status
-  constexpr static uint32_t RF0R = CanBase + 0x00C; // rx fifo 0 info reg
+  typedef struct
+  {
+    volatile uint32_t RIR;
+    volatile uint32_t RDTR;
+    volatile uint32_t RDLR;
+    volatile uint32_t RDHR;
+  } FifoMailbox;
 
-  constexpr static uint32_t IER = CanBase + 0x014; // interrupt enable
+  typedef struct
+  {
+    volatile uint32_t FR1;
+    volatile uint32_t FR2;
+  } Filterregister;
 
-  constexpr static uint32_t BTR = CanBase + 0x01C; // bit timing and rate
-
-  constexpr static uint32_t TI0R = CanBase + 0x180;  // tx mailbox id
-  constexpr static uint32_t TDT0r = CanBase + 0x184; // tx data len and time stamp
-  constexpr static uint32_t TDL0r = CanBase + 0x188; // tx mailbox data[3:0]
-  constexpr static uint32_t TDH0r = CanBase + 0x18C; // tx mailbox data[7:4]
-
-  constexpr static uint32_t RI0r = CanBase + 0x1B0;  // rx fifo id reg
-  constexpr static uint32_t RDT0r = CanBase + 0x1B4; // fifo data len and time stamp
-  constexpr static uint32_t RDL0r = CanBase + 0x1B8; // rx fifo data low
-  constexpr static uint32_t RDH0r = CanBase + 0x1BC; // rx fifo data high
-
-  constexpr static uint32_t fmr = CanBase + 0x200;   // filter master reg
-  constexpr static uint32_t fm1r = CanBase + 0x204;  // filter mode reg
-  constexpr static uint32_t fs1r = CanBase + 0x20C;  // filter scale reg, 16/32 bits
-  constexpr static uint32_t ffa1r = CanBase + 0x214; // filter FIFO assignment
-  constexpr static uint32_t fa1r = CanBase + 0x21C;  // filter activation reg
-  constexpr static uint32_t fr1 = CanBase + 0x240;   // id/mask acceptance reg1
-  constexpr static uint32_t fr2 = CanBase + 0x244;   // id/mask acceptance reg2
+  typedef struct
+  {
+    volatile uint32_t MCR;
+    volatile uint32_t MSR;
+    volatile uint32_t TSR;
+    volatile uint32_t RF0R;
+    volatile uint32_t RF1R;
+    volatile uint32_t IER;
+    volatile uint32_t ESR;
+    volatile uint32_t BTR;
+    uint32_t RESERVED0[88];
+    TxMailbox sTxMailBox[3];
+    FifoMailbox sFIFOMailBox[2];
+    uint32_t RESERVED1[12];
+    volatile uint32_t FMR;
+    volatile uint32_t FM1R;
+    uint32_t RESERVED2;
+    volatile uint32_t FS1R;
+    uint32_t RESERVED3;
+    volatile uint32_t FFA1R;
+    uint32_t RESERVED4;
+    volatile uint32_t FA1R;
+    uint32_t RESERVED5[8];
+    Filterregister sFilterregs[14];
+  } CanRegister;
 
   constexpr static uint32_t scsBase = 0xE000E000UL;        // System Control Space Base Address
   constexpr static uint32_t nvicBase = scsBase + 0x0100UL; // NVIC Base Address
@@ -87,9 +105,6 @@ public:
     return MMIO32(0x42000000 + ((addr & 0xFFFFF) << 5) + (bitNum << 2)); // uses bit band memory
   }
 
-#define INRQ MCR, 0
-#define INAK MSR, 0
-#define FINIT fmr, 0
 #define fmpie0 1 // rx interrupt enable on rx msg pending bit
 
   typedef enum : uint8_t
@@ -129,6 +144,7 @@ public:
 
 public:
   Stm32Can(IdType addrType = STD_ID_LEN, uint32_t brp = (2 << 20) | (13 << 16) | (14 << 0), BusType hw = PORTA_11_12_XCVR)
+      : m_regs((CanRegister *)0x40006400)
   {
     begin(addrType, brp, hw);
   }
@@ -144,10 +160,10 @@ public:
   // int receive(volatile int *id, volatile int *fltrIdx, volatile void *pData);
   int receive(volatile int &id, volatile int &fltrIdx, volatile uint8_t pData[]);
   void attachInterrupt(void func());
-  bool getSilentMode() { return MMIO32(BTR) >> 31; }
-  void setAutoTxRetry(bool val = true) { periphBit(MCR, 4) = !val; } // &= 0xffffffef | retry << 4;}     // if tx isn't ACK'd don't retry
+  bool getSilentMode() { return (m_regs->BTR) >> 31; }
+  void setAutoTxRetry(bool val = true) { val ? (m_regs->MCR) &= ~(1 << 4) : (m_regs->MCR) |= (1 << 4); } // &= 0xffffffef | retry << 4;}     // if tx isn't ACK'd don't retry
   // void setSilentMode(bool silent) { MMIO32(BTR) &= 0x7fffffff | silent << 31; } // bus listen only
-  void setSilentMode(bool val) { periphBit(BTR, 31) = val; }
+  void setSilentMode(bool val) { val ? (m_regs->BTR) |= (1 << 4) : (m_regs->BTR) &= ~(1 << 4); };
   IdType getIDType() { return _extIDs; }
   IdType getRxIDType() { return _rxExtended; }
   ~Stm32Can() {}
@@ -156,9 +172,9 @@ public:
   // uint8_t rxFull = 0;
   // uint8_t rxOverflow = 0;
 
-  uint8_t getRxMsgFifo0Cnt() { return MMIO32(RF0R) & (3 << 0); } // num of msgs
-  uint8_t getRxMsgFifo0Full() { return MMIO32(RF0R) & (1 << 3); }
-  uint8_t getRxMsgFifo0Overflow() { return MMIO32(RF0R) & (1 << 4); } // b4
+  uint8_t getRxMsgFifo0Cnt() { return (m_regs->RF0R) & (3 << 0); } // num of msgs
+  uint8_t getRxMsgFifo0Full() { return (m_regs->RF0R) & (1 << 3); }
+  uint8_t getRxMsgFifo0Overflow() { return (m_regs->RF0R) & (1 << 4); } // b4
 
   volatile int rxMsgLen = -1; // CAN parms
   volatile int id, fltIdx;
@@ -166,6 +182,8 @@ public:
 
 protected:
 private:
+  volatile CanRegister *m_regs;
+
   IdType _extIDs = STD_ID_LEN;
   IdType _rxExtended;
   void filter16Init(int bank, int mode, int a = 0, int b = 0, int c = 0, int d = 0); // 16b filters

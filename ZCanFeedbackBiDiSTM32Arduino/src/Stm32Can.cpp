@@ -93,28 +93,28 @@ void Stm32Can::begin(IdType addrType, uint32_t brp, bool singleWire, bool alt, b
         MMIO32(crhA) |= swMode << 16;           // set output
     }
     // set up CAN peripheral
-    periphBit(Rcc + 0x1C, 25) = 1;      // enable CAN1
-    periphBit(MCR, 1) = 0;              // exit sleep
-    MMIO32(MCR) |= (1 << 6) | (1 << 0); // set ABOM, init req (INRQ)
-    while (periphBit(INAK) == 0)        // wait for hw ready
+    periphBit(Rcc + 0x1C, 25) = 1;          // enable CAN1
+    m_regs->MCR &= ~(1 << 1);               // exit sleep
+    m_regs->MCR |= (1 << 6) | (1 << 0);     // set ABOM, init req (INRQ)
+    while (((m_regs->MSR) & (1 << 0)) == 0) // wait for hw ready
         ;
-    MMIO32(BTR) = brp; // 125K, 12/15=80% sample pt. prescale = 15
+    m_regs->BTR = brp; // 125K, 12/15=80% sample pt. prescale = 15
     // periphBit(TI0R, 2) = _extIDs;                      // 0 = std 11b ids, 1 = extended 29b ids
-    periphBit(INRQ) = 0;    // request init leave to Normal mode
-    while (periphBit(INAK)) // wait for hw
+    (m_regs->MCR) &= ~(1 << 0);             // request init leave to Normal mode
+    while (((m_regs->MSR) & (1 << 0)) != 0) // wait for hw
         ;
     filterMask16Init(0, 0, 0, 0, 0); // let all msgs pass to fifo0 by default
 }
 
 void Stm32Can::enableInterrupt()
 {
-    periphBit(IER, fmpie0) = 1U; // set fifo RX int enable request
+    (m_regs->IER) |= (1 << fmpie0); // set fifo RX int enable request
     MMIO32(iser) = 1UL << 20;
 }
 
 void Stm32Can::disableInterrupt()
 {
-    periphBit(IER, fmpie0) = 0U;
+    (m_regs->IER) &= ~(1 << fmpie0);
     MMIO32(iser) = 1UL << 20;
 }
 
@@ -130,16 +130,15 @@ void Stm32Can::filterList16Init(int bank, int idA, int idB, int idC, int idD) //
 
 void Stm32Can::filter16Init(int bank, int mode, int a, int b, int c, int d) // 16b filters
 {
-    periphBit(FINIT) = 1;                            // FINIT  'init' filter mode ]
-    periphBit(fa1r, bank) = 0;                       // de-activate filter 'bank'
-    periphBit(fs1r, bank) = 0;                       // fsc filter scale reg,  0 => 2ea. 16b
-    periphBit(fm1r, bank) = mode;                    // fbm list mode = 1, 0 = mask
-    MMIO32(fr1 + (8 * bank)) = (b << 21) | (a << 5); // fltr1,2 of flt bank n  OR  flt/mask 1 in mask mode
-    MMIO32(fr2 + (8 * bank)) = (d << 21) | (c << 5); // fltr3,4 of flt bank n  OR  flt/mask 2 in mask mode
-    periphBit(fa1r, bank) = 1;                       // activate this filter ]
-    periphBit(FINIT) = 0;                            // ~FINIT  'active' filter mode ]
+    (m_regs->FMR) |= (1 << 0);                                             // FINIT  'init' filter mode ]
+    (m_regs->FA1R) &= ~(1 << bank);                                        // de-activate filter 'bank'
+    (m_regs->FS1R) &= ~(1 << bank);                                        // fsc filter scale reg,  0 => 2ea. 16b
+    mode ? (m_regs->FS1R) |= (1 << bank) : (m_regs->FS1R) &= ~(1 << bank); // fbm list mode = 1, 0 = mask
+    (m_regs->sFilterregs[bank].FR1) = (b << 21) | (a << 5);                // fltr1,2 of flt bank n  OR  flt/mask 1 in mask mode
+    (m_regs->sFilterregs[bank].FR2) = (d << 21) | (c << 5);                // fltr3,4 of flt bank n  OR  flt/mask 2 in mask mode
+    (m_regs->FA1R) |= (1 << bank);                                         // activate this filter ]
+    (m_regs->FMR) &= ~(1 << 0);                                            // ~FINIT  'active' filter mode ]
 }
-
 void Stm32Can::filterList32Init(int bank, u_int32_t idA, u_int32_t idB) // 32b filters
 {
     filter32Init(bank, 1, idA, idB);
@@ -153,14 +152,14 @@ void Stm32Can::filterMask32Init(int bank, u_int32_t id, u_int32_t mask) // 32b f
 
 void Stm32Can::filter32Init(int bank, int mode, u_int32_t a, u_int32_t b) // 32b filters
 {
-    periphBit(FINIT) = 1;                    // FINIT  'init' filter mode
-    periphBit(fa1r, bank) = 0;               // de-activate filter 'bank'
-    periphBit(fs1r, bank) = 1;               // fsc filter scale reg,  0 => 2ea. 16b,  1=>32b
-    periphBit(fm1r, bank) = mode;            // fbm list mode = 1, 0 = mask
-    MMIO32(fr1 + (8 * bank)) = (a << 3) | 4; // the RXID/MASK to match
-    MMIO32(fr2 + (8 * bank)) = (b << 3) | 4; // must replace a mask of zeros so that everything isn't passed
-    periphBit(fa1r, bank) = 1;               // activate this filter
-    periphBit(FINIT) = 0;                    // ~FINIT  'active' filter mode
+    (m_regs->FMR) |= (1 << 0);                                             // FINIT  'init' filter mode
+    (m_regs->FA1R) &= ~(1 << bank);                                        // de-activate filter 'bank'
+    (m_regs->FS1R) |= (1 << bank);                                         // fsc filter scale reg,  0 => 2ea. 16b,  1=>32b
+    mode ? (m_regs->FS1R) |= (1 << bank) : (m_regs->FS1R) &= ~(1 << bank); // fbm list mode = 1, 0 = mask
+    (m_regs->sFilterregs[bank].FR1) = (a << 3) | 4;                        // the RXID/MASK to match
+    (m_regs->sFilterregs[bank].FR2) = (b << 3) | 4;                        // must replace a mask of zeros so that everything isn't passed
+    (m_regs->FA1R) |= (1 << bank);                                         // activate this filter
+    (m_regs->FMR) &= ~(1 << 0);                                            // ~FINIT  'active' filter mode
 }
 
 // bool Stm32Can::transmit(int txId, const void *ptr, unsigned int len)
@@ -179,24 +178,22 @@ bool Stm32Can::transmit(int txId, const void *ptr, unsigned int len)
     // }
     // TME0
     bool result{false};
-    if ((periphBit(TSR, 26) != 0U) ||
-        (periphBit(TSR, 27) != 0U) ||
-        (periphBit(TSR, 28) != 0U))
+    if (((m_regs->TSR) & (7 << 26)) != 0)
     {
 
-        uint8_t freeMailbox = (MMIO32(TSR)  & (3<<24)) >> 24;
+        uint8_t freeMailbox = (m_regs->TSR & (3 << 24)) >> 24;
 
         if (_extIDs)
-            MMIO32(TI0R) = (txId << 3) + 0b100; // // set 29b extended ID.
+            m_regs->sTxMailBox[freeMailbox].TIR = (txId << 3) + 0b100; // // set 29b extended ID.
         else
-            MMIO32(TI0R) = (txId << 21) + 0b000; // 12b std id
+            m_regs->sTxMailBox[freeMailbox].TIR = (txId << 21) + 0b000; // 12b std id
 
-        MMIO32(TDT0r) = (len << 0);
+        m_regs->sTxMailBox[freeMailbox].TDTR = (len << 0);
         // this assumes that misaligned word access works
-        MMIO32(TDL0r) = ((const uint32_t *)ptr)[0];
-        MMIO32(TDH0r) = ((const uint32_t *)ptr)[1];
+        m_regs->sTxMailBox[freeMailbox].TDLR = ((const uint32_t *)ptr)[0];
+        m_regs->sTxMailBox[freeMailbox].TDHR = ((const uint32_t *)ptr)[1];
 
-        periphBit(TI0R, 0) = 1; // tx request
+        m_regs->sTxMailBox[freeMailbox].TIR |= (1 << 0); // tx request
         result = true;
     }
     return result;
@@ -210,19 +207,19 @@ int Stm32Can::receive(volatile int &id, volatile int &fltrIdx, volatile uint8_t 
     // rxFull = MMIO32(RF0R) & (1 << 3);
     // rxOverflow = MMIO32(RF0R) & (1 << 4); // b4
 
-    if (MMIO32(RF0R) & (3 << 0)) // num of msgs pending
+    if ((m_regs->RF0R) & (3 << 0)) // num of msgs pending
     {
-        _rxExtended = static_cast<IdType>((MMIO32(RI0r) & 1 << 2) >> 2);
+        _rxExtended = static_cast<IdType>(((m_regs->sFIFOMailBox[0].RIR) & (1 << 2)) >> 2);
 
         if (_rxExtended)
-            id = (MMIO32(RI0r) >> 3); // extended id
+            id = ((m_regs->sFIFOMailBox[0].RIR) >> 3); // extended id
         else
-            id = (MMIO32(RI0r) >> 21);          // std id
-        len = MMIO32(RDT0r) & 0x0F;             // fifo data len and time stamp
-        fltrIdx = (MMIO32(RDT0r) >> 8) & 0xff;  // filter match index. Index accumalates from start of bank
-        ((uint32_t *)pData)[0] = MMIO32(RDL0r); // 4 low rx bytes
-        ((uint32_t *)pData)[1] = MMIO32(RDH0r); // another 4 bytes
-        periphBit(RF0R, 5) = 1;                 // release the mailbox
+            id = ((m_regs->sFIFOMailBox[0].RIR) >> 21);          // std id
+        len = (m_regs->sFIFOMailBox[0].RDTR) & 0x0F;             // fifo data len and time stamp
+        fltrIdx = ((m_regs->sFIFOMailBox[0].RDTR) >> 8) & 0xff;  // filter match index. Index accumalates from start of bank
+        ((uint32_t *)pData)[0] = (m_regs->sFIFOMailBox[0].RDLR); // 4 low rx bytes
+        ((uint32_t *)pData)[1] = (m_regs->sFIFOMailBox[0].RDHR); // another 4 bytes
+        (m_regs->RF0R) |= (1 << 5);                              // release the mailbox
     }
     return len;
 }
