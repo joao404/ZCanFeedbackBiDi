@@ -1,0 +1,4 @@
+#pragma once
+
+// #define HAL_CAN_MODULE_ENABLED
+// #define USE_HAL_CAN_REGISTER_CALLBACKS 1U

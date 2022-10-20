@@ -47,7 +47,7 @@ void CanInterfaceStm32::begin()
 {
     m_printFunc("Setting up CAN GPIO...\n");
 
-    m_canHandle.begin(EXT_ID_LEN, (1 << 20) | (12 << 16) | (13 << 0), PORTA_11_12_WIRE_PULLUP);
+    m_canHandle.begin(Stm32Can::EXT_ID_LEN, (1 << 20) | (12 << 16) | (13 << 0), Stm32Can::PORTA_11_12_WIRE_PULLUP);
 
     if (m_usingInterrupt)
     {

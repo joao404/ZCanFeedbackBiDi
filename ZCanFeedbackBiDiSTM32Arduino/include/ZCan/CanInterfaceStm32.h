@@ -17,7 +17,7 @@
 #pragma once
 
 #include "ZCan/CanInterface.h"
-#include "eXoCAN.h"
+#include "Stm32Can.h"
 
 class CanInterfaceStm32 : public CanInterface
 {
@@ -41,7 +41,7 @@ public:
 private:
     static std::shared_ptr<CanInterfaceStm32> m_instance;
 
-    eXoCAN m_canHandle;
+    Stm32Can m_canHandle;
 
     bool m_usingInterrupt;
 
