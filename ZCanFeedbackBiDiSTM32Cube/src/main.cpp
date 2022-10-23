@@ -47,8 +47,6 @@ uint8_t uart_getc(void)
 
 #define START_ADDRESS_MEMORY 0x0800FC00
 
-uint32_t AdcDmaBuffer[200];
-
 std::shared_ptr<CanInterfaceStm32> canInterface = CanInterfaceStm32::createInstance(false, xprintf);
 
 void flashReadData(void);

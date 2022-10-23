@@ -17,6 +17,7 @@
 #pragma once
 #include "ZCan/ZCanInterfaceObserver.h"
 #include <array>
+#include "adc.h"
 
 class FeedbackDecoder : public ZCanInterfaceObserver
 {
@@ -39,8 +40,15 @@ public:
         std::array<uint16_t, 8> voltageOffset;
     } ModulConfig;
 
-    FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, bool hasRailcom,
-                    int configRailcomPin, int configIdPin, bool debug, bool zcanDebug, void (*printFunc)(const char *, ...) = nullptr);
+    enum class Detection:uint8_t
+    {
+        Digital=0,
+        CurrentSense,
+        Railcom
+    };
+
+    FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
+                    int configAnalogOffsetPin, int configIdPin, bool debug, bool zcanDebug, void (*printFunc)(const char *, ...) = nullptr);
     virtual ~FeedbackDecoder();
 
     void begin();
@@ -51,7 +59,7 @@ public:
 
     void callbackLocoAddrReceived(uint16_t addr);
 
-    // void callbackAdcReadFinished(ADC_HandleTypeDef *hadc);
+    void callbackAdcReadFinished(ADC_HandleTypeDef *hadc);
 
 protected:
     virtual void onIdenticalNetworkId() override;
@@ -82,9 +90,9 @@ protected:
 
     bool (*m_saveDataFkt)(void);
 
-    bool m_hasRailcom;
+    Detection m_detectionConfig;
 
-    int m_configRailcomPin;
+    int m_configAnalogOffsetPin;
 
     int m_configIdPin;
 
@@ -131,13 +139,15 @@ protected:
 
     const uint8_t m_maxNumberOfConsecutiveMeasurements;
 
-    std::array<uint16_t, 512> m_adcDmaBuffer;
+    std::array<uint16_t, 380> m_adcDmaBuffer;
 
-    std::array<bool, 512> m_bitStreamDataBuffer;
+    std::array<bool, 380> m_bitStreamDataBuffer;
 
     uint16_t m_trackSetVoltage;
 
     bool m_processingRailcomData;
+
+    bool m_sendRailcomData;
 
 private:
     ModulConfig &m_modulConfig;

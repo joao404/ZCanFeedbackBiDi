@@ -23,13 +23,9 @@
 class Flash
 {
 public:
-    Flash(void* memoryDataPtr, size_t memoryDataSize){m_memoryDataPtr = m_memoryDataPtr; m_memoryDataSize = memoryDataSize;};
-    virtual ~Flash(){};
-
     static void readData(void);
     static bool writeData(void);
 
-private:
-    static void* m_memoryDataPtr;
+    static uint16_t* m_memoryDataPtr;
     static size_t m_memoryDataSize;
 };

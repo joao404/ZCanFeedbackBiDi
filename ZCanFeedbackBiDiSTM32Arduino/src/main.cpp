@@ -23,6 +23,8 @@
 #include "Flash.h"
 #include <vector>
 #include <memory>
+#include "adc.h"
+#include "dma.h"
 
 void uart_putc(uint8_t d)
 {
@@ -39,41 +41,45 @@ typedef struct
 
 MemoryData memoryData;
 
-Flash flash(&memoryData, sizeof(MemoryData));
-
 std::array<int, 8> trackPin1{PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7};
 
-bool hasRailcom{false};
 int configRailcomPin = PB0;
 int configIdPin = PB1;
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
-FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, hasRailcom,
-                                 configRailcomPin, configIdPin, true, false, xprintf);
+FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, FeedbackDecoder::Detection::Railcom,
+                                 configRailcomPin, configIdPin, true, true, xprintf);
+
+int ledPin = PC13;
 
 // Called when first half of buffer is filled
-// void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
-// {
-//   HAL_GPIO_WritePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin, GPIO_PIN_SET);
-// }
+void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  // Serial.println("H");
+  digitalWrite(ledPin, HIGH);
+}
 
-// // Called when buffer is completely filled
-// void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
-// {
-//   HAL_GPIO_WritePin(LED_BUILTIN_GPIO_Port, LED_BUILTIN_Pin, GPIO_PIN_RESET);
-//   feedbackDecoder1.callbackAdcReadFinished(hadc);
-// }
+// Called when buffer is completely filled
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  // Serial.println("F\n");
+  digitalWrite(ledPin, LOW);
+  feedbackDecoder1.callbackAdcReadFinished(hadc);
+}
 
 NmraDcc dcc;
 DCC_MSG Packet;
 
 void setup()
 {
+  pinMode(ledPin, OUTPUT);
   Serial.begin(115200);
   xdev_out(uart_putc);
+  MX_DMA_Init();
+  MX_ADC1_Init();
   Serial.printf("ZCAN Feedback Decoder system frequency: %lu\n", HAL_RCC_GetSysClockFreq());
   // Calibrate The ADC On Power-Up For Better Accuracy
-  // HAL_ADCEx_Calibration_Start(&hadc1);
+  HAL_ADCEx_Calibration_Start(&hadc1);
 
   if (nullptr != canInterface.get())
   {
@@ -87,6 +93,8 @@ void setup()
     xprintf("ERROR: No can interface defined\n");
   }
 
+  Flash::m_memoryDataPtr = (uint16_t*)&memoryData;
+  Flash::m_memoryDataSize = sizeof(MemoryData); 
   Flash::readData();
 
   feedbackDecoder1.begin();

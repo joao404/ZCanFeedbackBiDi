@@ -40,13 +40,13 @@
 #include <cstring>
 #include "Arduino.h"
 
-FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, bool hasRailcom,
-                                 int configRailcomPin, int configIdPin, bool debug, bool zcanDebug, void (*printFunc)(const char *, ...))
+FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
+                                 int configAnalogOffsetPin, int configIdPin, bool debug, bool zcanDebug, void (*printFunc)(const char *, ...))
     : ZCanInterfaceObserver(zcanDebug, printFunc),
       m_debug(debug),
       m_saveDataFkt(saveDataFkt),
-      m_hasRailcom(hasRailcom),
-      m_configRailcomPin(configRailcomPin),
+      m_detectionConfig(detectionConfig),
+      m_configAnalogOffsetPin(configAnalogOffsetPin),
       m_configIdPin(configIdPin),
       m_modulId(0x0),
       m_idPrgStartTimeINms(0),
@@ -61,6 +61,7 @@ FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(v
       m_currentMeasurementPerPort(0),
       m_maxNumberOfConsecutiveMeasurements(4),
       m_processingRailcomData(false),
+      m_sendRailcomData(false),
       m_modulConfig(modulConfig),
       m_firmwareVersion(0x05010014), // 5.1.20
       m_buildDate(0x07E60917),       // 23.09.2022
@@ -82,9 +83,9 @@ FeedbackDecoder::~FeedbackDecoder()
 
 void FeedbackDecoder::begin()
 {
-	pinMode(m_configIdPin, INPUT_PULLUP);
-	
-    if (0xFFFF == m_modulConfig.networkId)
+    pinMode(m_configIdPin, INPUT_PULLUP);
+
+    if ((0xFFFF == m_modulConfig.networkId) || (0x0 == m_modulConfig.networkId))
     {
         // memory not set before
         // write default values
@@ -106,6 +107,7 @@ void FeedbackDecoder::begin()
         m_saveDataFkt();
     }
 
+    // m_modulConfig.networkId = 0x9201;
     m_networkId = m_modulConfig.networkId;
     m_modulId = m_modulConfig.modulAdress;
     uint32_t day = BUILDTM_DAY;
@@ -121,62 +123,60 @@ void FeedbackDecoder::begin()
     m_printFunc("trackSetCurrentINmA: %d\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
     m_printFunc("trackFreeToSetTimeINms: %d\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
     m_printFunc("trackSetToFreeTimeINms: %d\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
+    m_printFunc("trackSetVoltage: %d\n", m_trackSetVoltage);
 
     m_pingJitterINms = std::max((uint32_t)0, std::min((micros() / 10), (uint32_t)100));
     m_pingIntervalINms = (9990 - m_pingJitterINms);
 
     ZCanInterfaceObserver::begin();
 
-    if (m_hasRailcom)
+    if (Detection::Railcom == m_detectionConfig)
     {
-		pinMode(m_configRailcomPin, INPUT_PULLUP);
+        m_printFunc("Railcom active\n");
+    }
+
+    if ((Detection::Railcom == m_detectionConfig) || (Detection::CurrentSense == m_detectionConfig))
+    {
+        pinMode(m_configAnalogOffsetPin, INPUT_PULLUP);
         //  this is done outside of FeedbackDecoder
-        if (!digitalRead(m_configRailcomPin))
+        if (!digitalRead(m_configAnalogOffsetPin))
         {
-            // ADC_ChannelConfTypeDef sConfig = {0};
-            // hadc1.Instance = ADC1;
-            // hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-            // hadc1.Init.ContinuousConvMode = DISABLE;
-            // hadc1.Init.DiscontinuousConvMode = DISABLE;
-            // hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-            // hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-            // hadc1.Init.NbrOfConversion = 1;
-            // if (HAL_ADC_Init(&hadc1) != HAL_OK)
-            // {
-            //     Error_Handler();
-            // }
-            // // read current values of adcs as default value
-            // for (uint8_t port = 0; port < m_trackData.size(); ++port)
-            // {
-            //     sConfig.Channel = m_trackData[port].pin.adcChannel;
-            //     sConfig.Rank = ADC_REGULAR_RANK_1;
-            //     sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
-            //     if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-            //     {
-            //         Error_Handler();
-            //     }
-            //     // Start ADC Conversion
-            //     HAL_ADC_Start(&hadc1);
-            //     // Poll ADC1 Perihperal & TimeOut = 1mSec
-            //     HAL_ADC_PollForConversion(&hadc1, 1);
-            //     // Read The ADC Conversion Result & Map It To PWM DutyCycle
-            //     m_trackData[port].voltageOffset = HAL_ADC_GetValue(&hadc1);
-            //     m_modulConfig.voltageOffset[port] = m_trackData[port].voltageOffset;
-            // }
-            // m_saveDataFkt();
-            // // use default ADC function again
-            // MX_ADC1_Init();
+            configSingleMeasurementMode();
+            // read current values of adcs as default value
+            for (uint8_t port = 0; port < m_trackData.size(); ++port)
+            {
+                setChannel(m_trackData[port].pin);
+                // Start ADC Conversion
+                HAL_ADC_Start(&hadc1);
+                // Poll ADC1 Perihperal & TimeOut = 1mSec
+                HAL_ADC_PollForConversion(&hadc1, 1);
+                // Read The ADC Conversion Result & Map It To PWM DutyCycle
+                m_trackData[port].voltageOffset = HAL_ADC_GetValue(&hadc1);
+                m_modulConfig.voltageOffset[port] = m_trackData[port].voltageOffset;
+                m_printFunc("Offset port %d: %d\n", port, m_modulConfig.voltageOffset[port]);
+            }
+            m_saveDataFkt();
+        }
+        else
+        {
+            for (uint8_t port = 0; port < m_trackData.size(); ++port)
+            {
+                m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
+            }
         }
 
-        // ADC_ChannelConfTypeDef sConfig = {0};
-        // sConfig.Channel = m_trackData[m_currentRailcomPort].pin.adcChannel;
-        // sConfig.Rank = ADC_REGULAR_RANK_1;
-        // sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
-        // if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-        // {
-        //     m_printFunc("Channel config failed\n");
-        //     Error_Handler();
-        // }
+        if (Detection::Railcom == m_detectionConfig)
+        {
+            // use default ADC function again
+            configContinuousDmaMode();
+        }
+
+        // TODO
+        // Ob das Gleis belegt ist wird auch im Falle ohne Railcom beim Stromfühler mittels dem ADC erkannt.
+        // Dieser macht eine einfache Messung und checkt, ob der Wert über dem Grenzwert liegt, da wir auch im Railcomfall um unseren Ruhepegel herum pendeln
+        // Das können direkt durchrotierende single messungen sein
+
+        setChannel(m_trackData[m_currentRailcomPort].pin);
 
         // TODO remove when functioning
         m_trackData[0].adress[0] = 0x8022;
@@ -203,6 +203,11 @@ void FeedbackDecoder::begin()
         }
     }
 
+    for (uint8_t port = 0; port < m_trackData.size(); ++port)
+    {
+        m_printFunc("Offset port %d: %d\n", port, m_modulConfig.voltageOffset[port]);
+    }
+
     // this is done outside of FeedbackDecoder
     // pinMode(m_configIdPin, INPUT_PULLUP);
 
@@ -212,7 +217,8 @@ void FeedbackDecoder::begin()
     // Send first ping
     sendPing(m_masterId, m_modulType, m_sessionId);
 
-    m_printFunc("%d finished config\n", m_networkId);
+    m_printFunc("%X finished config\n", m_networkId);
+    // m_printFunc("%d\n", HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBuffer.begin(), m_adcDmaBuffer.size()));
 }
 
 void FeedbackDecoder::cyclic()
@@ -285,12 +291,40 @@ void FeedbackDecoder::cyclic()
         // da der buffer mit 4096 für 4ms reichen würde, das Fenster jedoch nur 450 us lang. Also reicht ein Buffer von
         // 512 werten
 
+        // m_currentMeasurementPerPort++;
+        // if (m_maxNumberOfConsecutiveMeasurements <= m_currentMeasurementPerPort)
+        // {
+        //     m_currentMeasurementPerPort = 0;
+        //     m_currentRailcomPort++;
+        // }
+        // if (sizeof(m_trackData) <= m_currentRailcomPort)
+        // {
+        //     m_currentRailcomPort = 0;
+        // }
+        // // after DMA was executed, configure next channel already to save time
+        // setChannel((int)m_currentRailcomPort);
+
         // m_bitStreamDataBuffer;
-        auto iteratorBit = m_bitStreamDataBuffer.begin();
-        for (auto iteratorDma = m_adcDmaBuffer.begin(); iteratorDma != m_adcDmaBuffer.end(); iteratorDma++, iteratorBit++)
+        if (!m_sendRailcomData)
         {
-            *iteratorBit = (abs(*iteratorDma - m_trackData[m_currentRailcomPort].voltageOffset) > m_trackSetVoltage);
-            m_printFunc("%d\n", *iteratorBit);
+            m_sendRailcomData = true;
+            m_printFunc("RailcomRead finished\n");
+            m_printFunc("Offset: %d\n", m_trackData[m_currentRailcomPort].voltageOffset);
+            auto iteratorBit = m_bitStreamDataBuffer.begin();
+            for (auto iteratorDma = m_adcDmaBuffer.begin(); iteratorDma != m_adcDmaBuffer.end(); iteratorDma++, iteratorBit++)
+            {
+                if (*iteratorDma > m_trackData[m_currentRailcomPort].voltageOffset)
+                {
+                    *iteratorBit = ((*iteratorDma - m_trackData[m_currentRailcomPort].voltageOffset) < m_trackSetVoltage);
+                }
+                else
+                {
+                    *iteratorBit = ((m_trackData[m_currentRailcomPort].voltageOffset - *iteratorDma) < m_trackSetVoltage);
+                }
+                // m_printFunc("%d\t%d\n", *iteratorDma, *iteratorBit);
+                m_printFunc("%d\n", *iteratorBit);
+                // m_printFunc("%d\n", *iteratorDma);
+            }
         }
 
         /*
@@ -321,6 +355,7 @@ void FeedbackDecoder::cyclic()
       else RailComReadFirst = true;
       */
 
+        // TODO activate again to set
         // m_processingRailcomData = false;
     }
 }
@@ -339,38 +374,20 @@ void FeedbackDecoder::callbackAccAddrReceived(uint16_t addr)
 void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
 {
     // start detection of Railcom
-    if (m_hasRailcom)
+    if (Detection::Railcom == m_detectionConfig)
     {
         if (!m_processingRailcomData)
         {
-            // HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBuffer.begin(), sizeof(m_adcDmaBuffer));
+            // m_printFunc("Railcom Reading started\n");
+            HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBuffer.begin(), m_adcDmaBuffer.size());
         }
     }
 }
 
-// void FeedbackDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
-// {
-//     m_processingRailcomData = true;
-//     m_currentMeasurementPerPort++;
-//     if (m_maxNumberOfConsecutiveMeasurements <= m_currentMeasurementPerPort)
-//     {
-//         m_currentMeasurementPerPort = 0;
-//         m_currentRailcomPort++;
-//     }
-//     if (sizeof(m_trackData) <= m_currentRailcomPort)
-//     {
-//         m_currentRailcomPort = 0;
-//     }
-//     // after DMA was executed, configure next channel already to save time
-//     ADC_ChannelConfTypeDef sConfig = {0};
-//     sConfig.Channel = m_trackData[m_currentRailcomPort].pin.adcChannel;
-//     sConfig.Rank = ADC_REGULAR_RANK_1;
-//     sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
-//     if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-//     {
-//         Error_Handler();
-//     }
-// }
+void FeedbackDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
+{
+    m_processingRailcomData = true;
+}
 
 bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, uint16_t adress1, uint16_t adress2, uint16_t adress3, uint16_t adress4)
 {
@@ -388,7 +405,7 @@ bool FeedbackDecoder::notifyBlockOccupied(uint8_t port, uint8_t type, bool occup
 void FeedbackDecoder::onIdenticalNetworkId()
 {
     // received own network id. Generate new random network id
-    m_modulConfig.networkId = modulNidMin + std::max((uint16_t)1, (uint16_t)(HAL_GetTick() % (modulNidMax - modulNidMin)));
+    m_modulConfig.networkId = modulNidMin + std::max((uint16_t)1, (uint16_t)(millis() % (modulNidMax - modulNidMin)));
     m_saveDataFkt();
     sendPing(m_masterId, m_modulType, m_sessionId);
 }
@@ -665,6 +682,6 @@ bool FeedbackDecoder::onPing(uint16_t id, uint32_t masterUid, uint16_t type, uin
 
 bool FeedbackDecoder::sendMessage(ZCanMessage &message)
 {
-    m_lastCanCmdSendINms = HAL_GetTick();
+    m_lastCanCmdSendINms = millis();
     return ZCanInterfaceObserver::sendMessage(message);
 }

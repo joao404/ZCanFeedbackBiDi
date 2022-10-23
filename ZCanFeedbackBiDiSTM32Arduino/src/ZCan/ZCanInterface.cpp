@@ -56,7 +56,8 @@ void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
         if (m_debug)
         {
             m_printFunc("Message with identical network id ");
-            m_printFunc("%s\n", message.getString().c_str());
+            m_printFunc("%X to %X\n", message.networkId, m_networkId);
+            // m_printFunc("%s\n", message.getString().c_str());
         }
         onIdenticalNetworkId();
     }

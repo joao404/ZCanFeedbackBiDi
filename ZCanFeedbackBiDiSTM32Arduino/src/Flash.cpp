@@ -16,7 +16,7 @@
 
 #include "Flash.h"
 
-void *Flash::m_memoryDataPtr = nullptr;
+uint16_t *Flash::m_memoryDataPtr = nullptr;
 size_t Flash::m_memoryDataSize = 0;
 
 void Flash::readData(void)
@@ -24,8 +24,8 @@ void Flash::readData(void)
     if (nullptr != m_memoryDataPtr)
     {
         uint16_t *memoryPtr = (uint16_t *)START_ADDRESS_MEMORY;
-        uint16_t *dataPtr = (uint16_t *)(m_memoryDataPtr);
-        for (uint16_t i = 0; i < m_memoryDataSize; i += 2)
+        uint16_t *dataPtr = Flash::m_memoryDataPtr;
+        for (uint16_t i = 0; i < Flash::m_memoryDataSize; i += 2)
         {
             *dataPtr = *(volatile uint16_t *)memoryPtr;
             memoryPtr++;
@@ -61,8 +61,8 @@ bool Flash::writeData(void)
     }
 
     uint32_t memoryAdress = START_ADDRESS_MEMORY;
-    uint16_t *dataPtr = (uint16_t *)(m_memoryDataPtr);
-    for (uint16_t i = 0; i < m_memoryDataSize; i += 2)
+    uint16_t *dataPtr = Flash::m_memoryDataPtr;
+    for (uint16_t i = 0; i < Flash::m_memoryDataSize; i += 2)
     {
         if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, memoryAdress, *dataPtr) == HAL_OK)
         {

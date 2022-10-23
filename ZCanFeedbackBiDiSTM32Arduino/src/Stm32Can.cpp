@@ -165,18 +165,6 @@ void Stm32Can::filter32Init(int bank, int mode, u_int32_t a, u_int32_t b) // 32b
 // bool Stm32Can::transmit(int txId, const void *ptr, unsigned int len)
 bool Stm32Can::transmit(int txId, const void *ptr, unsigned int len)
 {
-    //  uint32_t timeout = 10UL, startT = 0;
-    // while (periphBit(tsr, 26) == 0) // tx not ready
-    // {
-    //     //     if(startT == 0)
-    //     //         startT = millis();
-    //     //     if((millis() - startT) > timeout)
-    //     //     {
-    //     //         Serial.println("time out");
-    //     //         return false;
-    //     //     }
-    // }
-    // TME0
     bool result{false};
     if (((m_regs->TSR) & (7 << 26)) != 0)
     {
@@ -202,11 +190,6 @@ bool Stm32Can::transmit(int txId, const void *ptr, unsigned int len)
 int Stm32Can::receive(volatile int &id, volatile int &fltrIdx, volatile uint8_t pData[])
 {
     int len = -1;
-
-    // rxMsgCnt = MMIO32(RF0R) & (3 << 0); //num of msgs
-    // rxFull = MMIO32(RF0R) & (1 << 3);
-    // rxOverflow = MMIO32(RF0R) & (1 << 4); // b4
-
     if ((m_regs->RF0R) & (3 << 0)) // num of msgs pending
     {
         _rxExtended = static_cast<IdType>(((m_regs->sFIFOMailBox[0].RIR) & (1 << 2)) >> 2);

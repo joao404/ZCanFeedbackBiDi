@@ -74,7 +74,7 @@ bool CanInterfaceStm32::transmit(CanMessage &frame, uint16_t timeoutINms)
     if (!m_canHandle.transmit(frame.identifier, &frame.data[0], frame.data_length_code))
     {
 
-        m_printFunc("Error TX\n");
+        // m_printFunc("Error TX\n");
         result = true;
     }
     return result;
