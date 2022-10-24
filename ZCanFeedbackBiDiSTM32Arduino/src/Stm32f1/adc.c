@@ -18,7 +18,7 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include "adc.h"
+#include "Stm32f1/adc.h"
 
 /* USER CODE BEGIN 0 */
 

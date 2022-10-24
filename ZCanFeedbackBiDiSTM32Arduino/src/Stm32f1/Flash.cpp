@@ -14,7 +14,7 @@
  * LICENSE file for more details.
  */
 
-#include "Flash.h"
+#include "Stm32f1/Flash.h"
 
 uint16_t *Flash::m_memoryDataPtr = nullptr;
 size_t Flash::m_memoryDataSize = 0;

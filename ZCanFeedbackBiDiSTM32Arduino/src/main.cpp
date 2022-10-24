@@ -20,11 +20,11 @@
 #include "FeedbackDecoder.h"
 #include "Helper/xprintf.h"
 #include "NmraDcc.h"
-#include "Flash.h"
+#include "Stm32f1/Flash.h"
 #include <vector>
 #include <memory>
-#include "adc.h"
-#include "dma.h"
+#include "Stm32f1/adc.h"
+#include "Stm32f1/dma.h"
 
 void uart_putc(uint8_t d)
 {
@@ -51,19 +51,12 @@ FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trac
                                  configRailcomPin, configIdPin, true, true, xprintf);
 
 int ledPin = PC13;
-
-// Called when first half of buffer is filled
-void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
-{
-  // Serial.println("H");
-  digitalWrite(ledPin, HIGH);
-}
+uint32_t lastLedBlinkINms{0};
+uint32_t ledBlinkIntervalINms{1000};
 
 // Called when buffer is completely filled
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-  // Serial.println("F\n");
-  digitalWrite(ledPin, LOW);
   feedbackDecoder1.callbackAdcReadFinished(hadc);
 }
 
@@ -110,6 +103,12 @@ void loop()
   dcc.process();
   canInterface->cyclic();
   feedbackDecoder1.cyclic();
+  uint32_t currentTimeINms = millis();
+  if((currentTimeINms -  lastLedBlinkINms)> ledBlinkIntervalINms)
+  {
+    digitalToggle(ledPin);
+    lastLedBlinkINms = currentTimeINms;
+  }
 }
 
 void notifyDccAccTurnoutOutput(uint16_t Addr, uint8_t Direction, uint8_t OutputPower)

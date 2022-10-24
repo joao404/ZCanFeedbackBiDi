@@ -19,7 +19,7 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
-#include "dma.h"
+#include "Stm32f1/dma.h"
 
 /* USER CODE BEGIN 0 */
 

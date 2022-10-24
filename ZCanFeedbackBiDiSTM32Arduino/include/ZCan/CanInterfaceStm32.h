@@ -17,7 +17,7 @@
 #pragma once
 
 #include "ZCan/CanInterface.h"
-#include "Stm32Can.h"
+#include "Stm32f1/Stm32Can.h"
 
 class CanInterfaceStm32 : public CanInterface
 {

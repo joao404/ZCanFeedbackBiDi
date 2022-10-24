@@ -17,7 +17,7 @@
 #pragma once
 #include "ZCan/ZCanInterfaceObserver.h"
 #include <array>
-#include "adc.h"
+#include "Stm32f1/adc.h"
 
 class FeedbackDecoder : public ZCanInterfaceObserver
 {

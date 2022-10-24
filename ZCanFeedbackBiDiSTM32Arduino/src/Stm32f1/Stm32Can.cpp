@@ -16,7 +16,7 @@
  * LICENSE file for more details.
  */
 
-#include "Stm32Can.h"
+#include "Stm32f1/Stm32Can.h"
 
 void Stm32Can::begin(IdType addrType, uint32_t brp, BusType hw)
 {
