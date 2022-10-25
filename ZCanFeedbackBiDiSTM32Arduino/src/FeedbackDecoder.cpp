@@ -57,11 +57,15 @@ FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(v
       m_pingIntervalINms(0),
       m_masterId(0x0),
       m_sessionId(0x0),
-      m_currentRailcomPort(0),
-      m_currentMeasurementPerPort(0),
+      m_currentSensePort(0),
+      m_currentSenseMeasurement(0),
+      m_currentSenseMeasurementMax(20),
+      m_currentSenseSum(0),
+      m_railcomDetectionPort(0),
+      m_railcomDetectionMeasurement(0),
       m_maxNumberOfConsecutiveMeasurements(4),
-      m_processingRailcomData(false),
-      m_sendRailcomData(false),
+      m_railcomCutOutActive(true),
+      m_railcomDataProcessed(true),
       m_modulConfig(modulConfig),
       m_firmwareVersion(0x05010014), // 5.1.20
       m_buildDate(0x07E60917),       // 23.09.2022
@@ -164,19 +168,12 @@ void FeedbackDecoder::begin()
                 m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
             }
         }
-
-        if (Detection::Railcom == m_detectionConfig)
-        {
-            // use default ADC function again
-            configContinuousDmaMode();
-        }
-
         // TODO
         // Ob das Gleis belegt ist wird auch im Falle ohne Railcom beim Stromfühler mittels dem ADC erkannt.
         // Dieser macht eine einfache Messung und checkt, ob der Wert über dem Grenzwert liegt, da wir auch im Railcomfall um unseren Ruhepegel herum pendeln
         // Das können direkt durchrotierende single messungen sein
 
-        setChannel(m_trackData[m_currentRailcomPort].pin);
+        setChannel(m_trackData[m_railcomDetectionPort].pin);
 
         // TODO remove when functioning
         m_trackData[0].adress[0] = 0x8022;
@@ -205,15 +202,13 @@ void FeedbackDecoder::begin()
 
     for (uint8_t port = 0; port < m_trackData.size(); ++port)
     {
-        m_printFunc("Offset port %d: %d\n", port, m_modulConfig.voltageOffset[port]);
+        m_printFunc("Offset port %d: %d\n", port, m_trackData[port].voltageOffset);
     }
-
     // this is done outside of FeedbackDecoder
     // pinMode(m_configIdPin, INPUT_PULLUP);
 
     // Wait random time before starting logging to Z21
     delay(millis());
-
     // Send first ping
     sendPing(m_masterId, m_modulType, m_sessionId);
 
@@ -243,42 +238,108 @@ void FeedbackDecoder::cyclic()
         m_idPrgStartTimeINms = currentTimeINms;
     }
 
-    for (uint8_t port = 0; port < m_trackData.size(); ++port)
+    if (Detection::Digital == m_detectionConfig)
     {
-        bool state = digitalRead(m_trackData[port].pin);
-        if (state != m_trackData[port].state)
+        for (uint8_t port = 0; port < m_trackData.size(); ++port)
         {
-            m_trackData[port].changeReported = false;
-            m_trackData[port].state = state;
-            m_trackData[port].lastChangeTimeINms = currentTimeINms;
-        }
-        if (!m_trackData[port].changeReported)
-        {
-            if (state)
+            bool state = digitalRead(m_trackData[port].pin);
+            if (state != m_trackData[port].state)
             {
-                if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
-                {
-                    m_trackData[port].changeReported = true;
-                    notifyBlockOccupied(port, 0x01, state);
-                    if (m_debug)
-                        m_printFunc("port: %d state:%d\n", port, state);
-                }
+                m_trackData[port].changeReported = false;
+                m_trackData[port].state = state;
+                m_trackData[port].lastChangeTimeINms = currentTimeINms;
             }
-            else
+            if (!m_trackData[port].changeReported)
             {
-                if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
+                if (state)
                 {
-                    m_trackData[port].changeReported = true;
-                    notifyBlockOccupied(port, 0x01, state);
-                    if (m_debug)
-                        m_printFunc("port: %d state:%d\n", port, state);
+                    if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
+                    {
+                        m_trackData[port].changeReported = true;
+                        notifyBlockOccupied(port, 0x01, state);
+                        if (m_debug)
+                            m_printFunc("port: %d state:%d\n", port, state);
+                    }
+                }
+                else
+                {
+                    if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
+                    {
+                        m_trackData[port].changeReported = true;
+                        notifyBlockOccupied(port, 0x01, state);
+                        if (m_debug)
+                            m_printFunc("port: %d state:%d\n", port, state);
+                    }
                 }
             }
         }
     }
 
-    if (m_processingRailcomData)
+    if (!m_railcomCutOutActive)
     {
+        // during DCC transmission, sample current over several times and detect if something is on the rail
+        setChannel(m_trackData[m_currentSensePort].pin);
+        // Start ADC Conversion
+        HAL_ADC_Start(&hadc1);
+        // Poll ADC1 Perihperal & TimeOut = 1mSec
+        HAL_ADC_PollForConversion(&hadc1, 1);
+        // Read The ADC Conversion Result & Map It To PWM DutyCycle
+        uint16_t currentMeasurement = HAL_ADC_GetValue(&hadc1);
+        if (currentMeasurement > m_trackData[m_currentSensePort].voltageOffset)
+        {
+            m_currentSenseSum += (currentMeasurement - m_trackData[m_currentSensePort].voltageOffset);
+        }
+        else
+        {
+            m_currentSenseSum += (m_trackData[m_currentSensePort].voltageOffset - currentMeasurement);
+        }
+
+        // m_printFunc("%u\n", currentMeasurement);
+        m_currentSenseMeasurement++;
+
+        if (m_currentSenseMeasurementMax <= m_currentSenseMeasurement)
+        {
+            m_currentSenseSum /= m_currentSenseMeasurementMax;
+            // m_printFunc("%u\n", m_currentSenseSum);
+            bool state = m_currentSenseSum > m_trackSetVoltage;
+            currentTimeINms = millis();
+            if (state != m_trackData[m_currentSensePort].state)
+            {
+                m_trackData[m_currentSensePort].changeReported = false;
+                m_trackData[m_currentSensePort].state = state;
+                m_trackData[m_currentSensePort].lastChangeTimeINms = currentTimeINms;
+            }
+            if (!m_trackData[m_currentSensePort].changeReported)
+            {
+                if (state)
+                {
+                    if ((m_trackData[m_currentSensePort].lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
+                    {
+                        m_trackData[m_currentSensePort].changeReported = true;
+                        notifyBlockOccupied(m_currentSensePort, 0x01, state);
+                        if (m_debug)
+                            m_printFunc("port: %d state:%d\n", m_currentSensePort, state);
+                    }
+                }
+                else
+                {
+                    if ((m_trackData[m_currentSensePort].lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
+                    {
+                        m_trackData[m_currentSensePort].changeReported = true;
+                        notifyBlockOccupied(m_currentSensePort, 0x01, state);
+                        if (m_debug)
+                            m_printFunc("port: %d state:%d\n", m_currentSensePort, state);
+                    }
+                }
+            }
+            m_currentSenseMeasurement = 0;
+            m_currentSensePort++;
+            if (m_trackData.size() <= m_currentSensePort)
+            {
+                m_currentSensePort = 0;
+            }
+        }
+
         // process Railcom data from ADC
         // memory has size of 4096
         // adc has 12mhz
@@ -291,72 +352,72 @@ void FeedbackDecoder::cyclic()
         // da der buffer mit 4096 für 4ms reichen würde, das Fenster jedoch nur 450 us lang. Also reicht ein Buffer von
         // 512 werten
 
-        // m_currentMeasurementPerPort++;
-        // if (m_maxNumberOfConsecutiveMeasurements <= m_currentMeasurementPerPort)
-        // {
-        //     m_currentMeasurementPerPort = 0;
-        //     m_currentRailcomPort++;
-        // }
-        // if (sizeof(m_trackData) <= m_currentRailcomPort)
-        // {
-        //     m_currentRailcomPort = 0;
-        // }
-        // // after DMA was executed, configure next channel already to save time
-        // setChannel((int)m_currentRailcomPort);
-
-        // m_bitStreamDataBuffer;
-        if (!m_sendRailcomData)
+        if (Detection::Railcom == m_detectionConfig)
         {
-            m_sendRailcomData = true;
-            m_printFunc("RailcomRead finished\n");
-            m_printFunc("Offset: %d\n", m_trackData[m_currentRailcomPort].voltageOffset);
-            auto iteratorBit = m_bitStreamDataBuffer.begin();
-            for (auto iteratorDma = m_adcDmaBuffer.begin(); iteratorDma != m_adcDmaBuffer.end(); iteratorDma++, iteratorBit++)
+
+            // m_bitStreamDataBuffer;
+            if (!m_railcomDataProcessed)
             {
-                if (*iteratorDma > m_trackData[m_currentRailcomPort].voltageOffset)
+                m_railcomDataProcessed = true;
+                m_printFunc("RailcomRead finished\n");
+                m_printFunc("Offset: %d\n", m_trackData[m_railcomDetectionPort].voltageOffset);
+                auto iteratorBit = m_bitStreamDataBuffer.begin();
+                for (auto iteratorDma = m_adcDmaBuffer.begin(); iteratorDma != m_adcDmaBuffer.end(); iteratorDma++, iteratorBit++)
                 {
-                    *iteratorBit = ((*iteratorDma - m_trackData[m_currentRailcomPort].voltageOffset) < m_trackSetVoltage);
+                    if (*iteratorDma > m_trackData[m_railcomDetectionPort].voltageOffset)
+                    {
+                        *iteratorBit = ((*iteratorDma - m_trackData[m_railcomDetectionPort].voltageOffset) < m_trackSetVoltage);
+                    }
+                    else
+                    {
+                        *iteratorBit = ((m_trackData[m_railcomDetectionPort].voltageOffset - *iteratorDma) < m_trackSetVoltage);
+                    }
+                    // m_printFunc("%d\t%d\n", *iteratorDma, *iteratorBit);
+                    m_printFunc("%d\n", *iteratorBit);
+                    // m_printFunc("%d\n", *iteratorDma);
                 }
-                else
+
+                // TODO
+                // Analyze direction after getting array with position of uart
+
+                std::array<uint8_t, 8> railcomData;
+                Railcom::handleBitStream(m_bitStreamDataBuffer.begin(), m_bitStreamDataBuffer.size() - 100, railcomData);
+
+                for (auto iter = railcomData.begin(); iter != railcomData.end(); iter++)
                 {
-                    *iteratorBit = ((m_trackData[m_currentRailcomPort].voltageOffset - *iteratorDma) < m_trackSetVoltage);
+                    m_printFunc("%X ");
                 }
-                // m_printFunc("%d\t%d\n", *iteratorDma, *iteratorBit);
-                m_printFunc("%d\n", *iteratorBit);
-                // m_printFunc("%d\n", *iteratorDma);
+                m_printFunc("\n");
             }
+
+            /*
+            byte data = RailComDecodeInData();   //read Railcom Data and decode Railcom Data
+          if (data < 0x40) {    //gültige Railcom Message empfangen
+                if (RailComReadFirst) {
+                  RailComReadData = data;   //Save first Byte of Data
+                  if ((data >> 2) < 3)  //app:pom, app:adr_low, app:adr_high -> read only 12 Bit!
+                    RailComReadFirst = false;
+                }
+                else {
+                  RailComReadFirst = true;
+                  byte RailComID = RailComReadData >> 2; //Save ID
+                  RailComReadData = (RailComReadData << 6) | data;    //first 2 Bit and add next 6 Bit
+                  if (RailComID == 0) { //app:pom
+                      RailComCVTime = 25; //Reset Timer!
+                      RailComReadLastCV = RailComReadData;
+                      RailComCVRead = true;
+                  }
+                  else if (RailComID == 1) { //app:adr_high
+                    RailComReadAdr = (RailComReadData << 8) | (RailComReadAdr & 0xFF);
+                  }
+                  else if (RailComID == 2) {  //app:adr_low
+                    RailComReadAdr = (RailComReadAdr & 0xFF00) | RailComReadData;
+                  }
+                }
+          }
+          else RailComReadFirst = true;
+          */
         }
-
-        /*
-        byte data = RailComDecodeInData();   //read Railcom Data and decode Railcom Data
-      if (data < 0x40) {    //gültige Railcom Message empfangen
-            if (RailComReadFirst) {
-              RailComReadData = data;   //Save first Byte of Data
-              if ((data >> 2) < 3)  //app:pom, app:adr_low, app:adr_high -> read only 12 Bit!
-                RailComReadFirst = false;
-            }
-            else {
-              RailComReadFirst = true;
-              byte RailComID = RailComReadData >> 2; //Save ID
-              RailComReadData = (RailComReadData << 6) | data;    //first 2 Bit and add next 6 Bit
-              if (RailComID == 0) { //app:pom
-                  RailComCVTime = 25; //Reset Timer!
-                  RailComReadLastCV = RailComReadData;
-                  RailComCVRead = true;
-              }
-              else if (RailComID == 1) { //app:adr_high
-                RailComReadAdr = (RailComReadData << 8) | (RailComReadAdr & 0xFF);
-              }
-              else if (RailComID == 2) {  //app:adr_low
-                RailComReadAdr = (RailComReadAdr & 0xFF00) | RailComReadData;
-              }
-            }
-      }
-      else RailComReadFirst = true;
-      */
-
-        // TODO activate again to set
-        // m_processingRailcomData = false;
     }
 }
 
@@ -374,19 +435,37 @@ void FeedbackDecoder::callbackAccAddrReceived(uint16_t addr)
 void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
 {
     // start detection of Railcom
-    if (Detection::Railcom == m_detectionConfig)
+    if ((Detection::Railcom == m_detectionConfig) || (Detection::CurrentSense == m_detectionConfig))
     {
-        if (!m_processingRailcomData)
-        {
-            // m_printFunc("Railcom Reading started\n");
-            HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBuffer.begin(), m_adcDmaBuffer.size());
-        }
+        // m_printFunc("Railcom Reading started\n");
+        m_railcomCutOutActive = true;
+        m_railcomDataProcessed = true;
+        configContinuousDmaMode();
+        // m_railcomDetectionMeasurement++;
+        // if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
+        // {
+        //     m_railcomDetectionMeasurement = 0;
+        //     m_railcomDetectionPort++;
+        // }
+        // if (sizeof(m_trackData) <= m_railcomDetectionPort)
+        // {
+        //     m_railcomDetectionPort = 0;
+        // }
+        // after DMA was executed, configure next channel already to save time
+        setChannel(m_trackData[m_railcomDetectionPort].pin);
+        HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBuffer.begin(), m_adcDmaBuffer.size());
     }
 }
 
 void FeedbackDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
 {
-    m_processingRailcomData = true;
+    m_railcomCutOutActive = false;
+    m_currentSenseMeasurement = 0;
+    if (Detection::Railcom == m_detectionConfig)
+    {
+        m_railcomDataProcessed = false;
+    }
+    configSingleMeasurementMode();
 }
 
 bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, uint16_t adress1, uint16_t adress2, uint16_t adress3, uint16_t adress4)

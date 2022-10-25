@@ -18,6 +18,7 @@
 #include "ZCan/ZCanInterfaceObserver.h"
 #include <array>
 #include "Stm32f1/adc.h"
+#include "Railcom.h"
 
 class FeedbackDecoder : public ZCanInterfaceObserver
 {
@@ -62,16 +63,17 @@ public:
     void callbackAdcReadFinished(ADC_HandleTypeDef *hadc);
 
 protected:
+    // reaction on a ZCan message with identical network id
     virtual void onIdenticalNetworkId() override;
-
+    // reaction on Accessory Data message
     virtual bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type) override;
-
+    // reaction on Accessory Port6 message
     virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type) override;
-
+    // reaction on request of modul info
     virtual bool onRequestModulInfo(uint16_t id, uint16_t type) override;
-
+    // reaction on event of modul power info
     virtual bool onModulPowerInfoEvt(uint16_t nid, uint8_t port, uint16_t status, uint16_t voltageINmV, uint16_t currentINmA) override;
-
+    // reaction on acknowledge of modul power info
     virtual bool onModulPowerInfoAck(uint16_t nid, uint8_t port, uint16_t status, uint16_t voltageINmV, uint16_t currentINmA) override;
 
     virtual bool onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info) override;
@@ -91,9 +93,9 @@ protected:
     bool (*m_saveDataFkt)(void);
 
     Detection m_detectionConfig;
-
+    // if this ping is set to low during startup, offset values for analog measurements are taken
     int m_configAnalogOffsetPin;
-
+    // ping for configuration of modul adress
     int m_configIdPin;
 
     uint16_t m_modulId;
@@ -105,15 +107,15 @@ protected:
     uint32_t m_idPrgIntervalINms;
 
     uint32_t m_lastCanCmdSendINms;
-
+    // jitter used for sending cyclic ping
     uint16_t m_pingJitterINms;
-
+    // interval used for sending cyclic ping
     uint32_t m_pingIntervalINms;
-
+    // id of current base station
     uint32_t m_masterId;
 
     uint16_t m_sessionId;
-
+    // modul type of feedback decoder
     uint16_t m_modulType{roco10808Type};
 
     // adress is 0x8000 up tp 0xC000
@@ -127,27 +129,37 @@ protected:
         bool state;
         bool changeReported;
         std::array<uint16_t, 4> adress;
+        uint16_t lastChannelData1;
+        uint16_t lastChannelData2;
         uint16_t voltageOffset;
         unsigned long lastChangeTimeINms;
     } TrackData;
 
     std::array<TrackData, 8> m_trackData;
 
-    uint8_t m_currentRailcomPort;
+    uint8_t m_currentSensePort;
 
-    uint8_t m_currentMeasurementPerPort;
+    uint8_t m_currentSenseMeasurement;
+
+    const uint8_t m_currentSenseMeasurementMax;
+
+    uint16_t m_currentSenseSum;
+
+    uint8_t m_railcomDetectionPort;
+
+    uint8_t m_railcomDetectionMeasurement;
 
     const uint8_t m_maxNumberOfConsecutiveMeasurements;
 
-    std::array<uint16_t, 380> m_adcDmaBuffer;
+    std::array<uint16_t, 512> m_adcDmaBuffer;
 
-    std::array<bool, 380> m_bitStreamDataBuffer;
+    std::array<bool, 512> m_bitStreamDataBuffer;
 
     uint16_t m_trackSetVoltage;
 
-    bool m_processingRailcomData;
+    bool m_railcomCutOutActive;
 
-    bool m_sendRailcomData;
+    bool m_railcomDataProcessed;
 
 private:
     ModulConfig &m_modulConfig;

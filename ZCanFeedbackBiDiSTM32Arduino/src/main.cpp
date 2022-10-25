@@ -43,14 +43,15 @@ MemoryData memoryData;
 
 std::array<int, 8> trackPin1{PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7};
 
-int configRailcomPin = PB0;
-int configIdPin = PB1;
+FeedbackDecoder::Detection detectionMode{FeedbackDecoder::Detection::CurrentSense};
+int configRailcomPin{PB0};
+int configIdPin{PB1};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
-FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, FeedbackDecoder::Detection::Railcom,
+FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, detectionMode,
                                  configRailcomPin, configIdPin, true, true, xprintf);
 
-int ledPin = PC13;
+int ledPin{PC13};
 uint32_t lastLedBlinkINms{0};
 uint32_t ledBlinkIntervalINms{1000};
 
@@ -86,8 +87,8 @@ void setup()
     xprintf("ERROR: No can interface defined\n");
   }
 
-  Flash::m_memoryDataPtr = (uint16_t*)&memoryData;
-  Flash::m_memoryDataSize = sizeof(MemoryData); 
+  Flash::m_memoryDataPtr = (uint16_t *)&memoryData;
+  Flash::m_memoryDataSize = sizeof(MemoryData);
   Flash::readData();
 
   feedbackDecoder1.begin();
@@ -104,7 +105,7 @@ void loop()
   canInterface->cyclic();
   feedbackDecoder1.cyclic();
   uint32_t currentTimeINms = millis();
-  if((currentTimeINms -  lastLedBlinkINms)> ledBlinkIntervalINms)
+  if ((currentTimeINms - lastLedBlinkINms) > ledBlinkIntervalINms)
   {
     digitalToggle(ledPin);
     lastLedBlinkINms = currentTimeINms;
