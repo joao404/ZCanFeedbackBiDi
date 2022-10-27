@@ -48,28 +48,7 @@ FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(v
       m_detectionConfig(detectionConfig),
       m_configAnalogOffsetPin(configAnalogOffsetPin),
       m_configIdPin(configIdPin),
-      m_modulId(0x0),
-      m_idPrgStartTimeINms(0),
-      m_idPrgRunning(false),
-      m_idPrgIntervalINms(60000), // 1 min
-      m_lastCanCmdSendINms(0),
-      m_pingJitterINms(0),
-      m_pingIntervalINms(0),
-      m_masterId(0x0),
-      m_sessionId(0x0),
-      m_currentSensePort(0),
-      m_currentSenseMeasurement(0),
-      m_currentSenseMeasurementMax(20),
-      m_currentSenseSum(0),
-      m_railcomDetectionPort(0),
-      m_railcomDetectionMeasurement(0),
-      m_maxNumberOfConsecutiveMeasurements(4),
-      m_railcomCutOutActive(true),
-      m_railcomDataProcessed(true),
-      m_modulConfig(modulConfig),
-      m_firmwareVersion(0x05010014), // 5.1.20
-      m_buildDate(0x07E60917),       // 23.09.2022
-      m_hardwareVersion(0x05010001)  // 5.1.1
+      m_modulConfig(modulConfig)
 {
     auto sizeTrackData = m_trackData.size();
     auto sizeTrackPin = trackPin.size();

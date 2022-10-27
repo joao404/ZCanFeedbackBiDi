@@ -144,7 +144,6 @@ public:
 
 public:
   Stm32Can(IdType addrType = STD_ID_LEN, uint32_t brp = (2 << 20) | (13 << 16) | (14 << 0), BusType hw = PORTA_11_12_XCVR)
-      : m_regs((CanRegister *)0x40006400)
   {
     begin(addrType, brp, hw);
   }
@@ -182,7 +181,7 @@ public:
 
 protected:
 private:
-  volatile CanRegister *m_regs;
+  volatile CanRegister *m_regs{(CanRegister*)0x40006400};
 
   IdType _extIDs = STD_ID_LEN;
   IdType _rxExtended;

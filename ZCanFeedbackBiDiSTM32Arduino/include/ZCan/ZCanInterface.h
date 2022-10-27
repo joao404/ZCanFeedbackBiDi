@@ -58,7 +58,7 @@ public:
      * optional beyond what the message length specifies. Exactly one
      * whitespace is inserted between different fields as a separator.
      */
-    //friend std::ostream& operator<<(std::ostream& out, const ZCanMessage& message);
+    // friend std::ostream& operator<<(std::ostream& out, const ZCanMessage& message);
     std::string getString();
 
     /**
@@ -160,7 +160,7 @@ protected:
 
     void (*m_printFunc)(const char *, ...){};
 
-    uint16_t m_networkId;
+    uint16_t m_networkId{0xFFFF};
 
     virtual void begin();
 

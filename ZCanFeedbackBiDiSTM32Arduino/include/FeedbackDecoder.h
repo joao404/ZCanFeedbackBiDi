@@ -98,23 +98,23 @@ protected:
     // ping for configuration of modul adress
     int m_configIdPin;
 
-    uint16_t m_modulId;
+    uint16_t m_modulId {0};
 
-    uint32_t m_idPrgStartTimeINms;
+    uint32_t m_idPrgStartTimeINms{0};
 
-    bool m_idPrgRunning;
+    bool m_idPrgRunning{false};
 
-    uint32_t m_idPrgIntervalINms;
+    uint32_t m_idPrgIntervalINms{60000}; // 1 min
 
-    uint32_t m_lastCanCmdSendINms;
+    uint32_t m_lastCanCmdSendINms{0};
     // jitter used for sending cyclic ping
-    uint16_t m_pingJitterINms;
+    uint16_t m_pingJitterINms{0};
     // interval used for sending cyclic ping
-    uint32_t m_pingIntervalINms;
+    uint32_t m_pingIntervalINms{0};
     // id of current base station
-    uint32_t m_masterId;
+    uint32_t m_masterId{0};
 
-    uint16_t m_sessionId;
+    uint16_t m_sessionId{0};
     // modul type of feedback decoder
     uint16_t m_modulType{roco10808Type};
 
@@ -141,29 +141,29 @@ protected:
 
     unsigned long m_railcomDataTimeoutINms{1000};
 
-    uint8_t m_currentSensePort;
+    uint8_t m_currentSensePort{0};
 
-    uint8_t m_currentSenseMeasurement;
+    uint8_t m_currentSenseMeasurement{0};
 
-    const uint8_t m_currentSenseMeasurementMax;
+    const uint8_t m_currentSenseMeasurementMax{20};
 
-    uint16_t m_currentSenseSum;
+    uint16_t m_currentSenseSum{0};
 
-    uint8_t m_railcomDetectionPort;
+    uint8_t m_railcomDetectionPort{0};
 
-    uint8_t m_railcomDetectionMeasurement;
+    uint8_t m_railcomDetectionMeasurement{0};
 
-    const uint8_t m_maxNumberOfConsecutiveMeasurements;
+    const uint8_t m_maxNumberOfConsecutiveMeasurements{4};
 
     std::array<uint16_t, 512> m_adcDmaBuffer;
 
     std::array<bool, 512> m_bitStreamDataBuffer;
 
-    uint16_t m_trackSetVoltage;
+    uint16_t m_trackSetVoltage{0};
 
-    bool m_railcomCutOutActive;
+    bool m_railcomCutOutActive{true};
 
-    bool m_railcomDataProcessed;
+    bool m_railcomDataProcessed{true};
 
     // adress is 0x8000 up tp 0xC000
     bool notifyLocoInBlock(uint8_t port, std::array<RailcomData, 4> railcomData);
@@ -173,7 +173,7 @@ protected:
 private:
     ModulConfig &m_modulConfig;
 
-    uint32_t m_firmwareVersion;
-    uint32_t m_buildDate;
-    uint32_t m_hardwareVersion;
+    uint32_t m_firmwareVersion{0x05010014}; // 5.1.20
+    uint32_t m_buildDate{0x07E60917}; // 23.09.2022
+    uint32_t m_hardwareVersion{0x05010001}; // 5.1.1 
 };

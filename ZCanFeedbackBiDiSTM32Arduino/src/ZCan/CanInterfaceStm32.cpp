@@ -21,8 +21,7 @@
 std::shared_ptr<CanInterfaceStm32> CanInterfaceStm32::m_instance;
 
 CanInterfaceStm32::CanInterfaceStm32(bool useInterrupt, void (*printFunc)(const char *, ...))
-    : m_canHandle(),
-      m_usingInterrupt(useInterrupt)
+    : m_usingInterrupt(useInterrupt)
 {
     if (nullptr != printFunc)
     {

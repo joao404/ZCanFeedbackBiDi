@@ -41,7 +41,7 @@ public:
 private:
     static std::shared_ptr<CanInterfaceStm32> m_instance;
 
-    Stm32Can m_canHandle;
+    Stm32Can m_canHandle {};
 
     bool m_usingInterrupt;
 

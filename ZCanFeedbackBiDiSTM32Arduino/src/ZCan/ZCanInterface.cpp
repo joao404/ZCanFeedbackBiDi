@@ -17,8 +17,7 @@
 #include "ZCan/ZCanInterface.h"
 
 ZCanInterface::ZCanInterface(bool debug, void (*printFunc)(const char *, ...))
-    : m_debug(debug),
-      m_networkId(0xFFFF)
+    : m_debug(debug)
 {
     if (nullptr != printFunc)
     {
