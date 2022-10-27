@@ -24,7 +24,7 @@ public:
     Railcom(){};
     virtual ~Railcom(){};
 
-    static bool getStartAndStopByteOfUart(bool *startOfSearch, bool *endOfSearch, bool **startBit, bool **endBit);
+    static bool getStartAndStopByteOfUart(bool* bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex, size_t* findStartIndex, size_t* findEndIndex);
     static uint8_t handleBitStream(bool bitStreamIN1samplePer1us[], size_t length, std::array<uint8_t, 8> &railcomData);
 
 static uint8_t encode4to8[];

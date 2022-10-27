@@ -16,27 +16,27 @@
 
 #include "Railcom.h"
 
-bool Railcom::getStartAndStopByteOfUart(bool *startOfSearch, bool *endOfSearch, bool **startBit, bool **endBit)
+bool Railcom::getStartAndStopByteOfUart(bool* bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex, size_t* findStartIndex, size_t* findEndIndex)
 {
-    bool *iterator = startOfSearch;
-
-    while (!(iterator[0] && !iterator[1]) && (&iterator[1] != endOfSearch))
+    while (!(bitStreamIN1samplePer1us[startIndex] && !bitStreamIN1samplePer1us[startIndex+1]) && ((startIndex) < endIndex))
     {
         // make sure to have first high level
-        iterator++;
+        startIndex++;
     }
-    if (&iterator[1] == endOfSearch)
+    if ((startIndex+1) >= endIndex)
     {
+        // Serial.printf("s%d", startIndex);
         return false;
     }
-    *startBit = &iterator[1];
+    *findStartIndex = startIndex;
 
-    *startBit += 5;
+    *findStartIndex += 6;
 
-    *endBit = *startBit + 28;
+    *findEndIndex = *findStartIndex + 28;
 
-    if (*endBit > endOfSearch)
+    if (*findEndIndex > endIndex)
     {
+        // Serial.printf("e%d", *findEndIndex);
         return false;
     }
 
@@ -45,25 +45,27 @@ bool Railcom::getStartAndStopByteOfUart(bool *startOfSearch, bool *endOfSearch, 
     return true;
 }
 
-uint8_t Railcom::handleBitStream(bool bitStreamIN1samplePer1us[], size_t length, std::array<uint8_t, 8> &railcomData)
+uint8_t Railcom::handleBitStream(bool* bitStreamIN1samplePer1us, size_t length, std::array<uint8_t, 8> &railcomData)
 {
     // search for starting zero of first byte by ignoring first 15us
-    bool *startBit = bitStreamIN1samplePer1us;
-    bool *endBit = bitStreamIN1samplePer1us;
+    size_t startIndex {0};
+    size_t endIndex {0};
+    size_t dataBeginIndex {0};
     uint8_t numberOfBytes{0};
 
     for (auto dataIterator = railcomData.begin(); dataIterator != railcomData.end(); dataIterator++)
     {
         *dataIterator = 0xFF;
-        if (Railcom::getStartAndStopByteOfUart(endBit, &bitStreamIN1samplePer1us[length - 1], &startBit, &endBit))
+        if (Railcom::getStartAndStopByteOfUart(bitStreamIN1samplePer1us, dataBeginIndex, length - 1, &startIndex, &endIndex))
         {
+            // Serial.printf("%d %d\n",startIndex, endIndex);
             // found
             uint8_t dataByte{0};
             uint8_t bit{0};
-            while (endBit >= startBit)
+            while (endIndex >= startIndex)
             {
-                dataByte |= (((*startBit) ? 1 : 0) << bit++);
-                startBit += 4;
+                dataByte |= ((bitStreamIN1samplePer1us[startIndex] ? 1 : 0) << bit++);
+                startIndex += 4;
             }
             if (8 == bit)
             {
@@ -73,6 +75,7 @@ uint8_t Railcom::handleBitStream(bool bitStreamIN1samplePer1us[], size_t length,
                 {
                 case 0xFF:
                     // not used => error
+                    // Serial.printf("f%x", dataByte);
                     break;
                 default:
                     *dataIterator = dataByte;
@@ -80,9 +83,15 @@ uint8_t Railcom::handleBitStream(bool bitStreamIN1samplePer1us[], size_t length,
                     break;
                 }
             }
+            else
+            {
+                // Serial.print("b");
+            }
+            dataBeginIndex = endIndex;
         }
         else
         {
+            // Serial.print("N");
             break;
         }
     }
@@ -247,7 +256,9 @@ uint8_t Railcom::encode4to8[] = {
     0b10000111, // not used
     0b00111100  // not used
 };
-
+// NACK 0x40
+// ACK 0x41
+// Busy 0x42
 uint8_t Railcom::encode8to4[] = {
     0xFF, // invalid 0b00000000
     0xFF, // invalid 0b00000001

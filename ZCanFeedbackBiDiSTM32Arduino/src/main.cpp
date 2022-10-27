@@ -43,7 +43,7 @@ MemoryData memoryData;
 
 std::array<int, 8> trackPin1{PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7};
 
-FeedbackDecoder::Detection detectionMode{FeedbackDecoder::Detection::CurrentSense};
+FeedbackDecoder::Detection detectionMode{FeedbackDecoder::Detection::Railcom};
 int configRailcomPin{PB0};
 int configIdPin{PB1};
 

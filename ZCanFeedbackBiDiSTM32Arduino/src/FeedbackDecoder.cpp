@@ -76,7 +76,7 @@ FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(v
     for (uint8_t i = 0; (i < sizeTrackData) && (i < sizeTrackPin); ++i)
     {
         m_trackData[i].pin = trackPin[i];
-        memset(m_trackData[i].adress.begin(), 0, sizeof(TrackData::adress));
+        memset(m_trackData[i].railcomData.begin(), 0, sizeof(TrackData::railcomData));
         m_trackData[i].changeReported = true; // first report is already done
     }
 }
@@ -87,6 +87,7 @@ FeedbackDecoder::~FeedbackDecoder()
 
 void FeedbackDecoder::begin()
 {
+
     pinMode(m_configIdPin, INPUT_PULLUP);
 
     if ((0xFFFF == m_modulConfig.networkId) || (0x0 == m_modulConfig.networkId))
@@ -166,6 +167,8 @@ void FeedbackDecoder::begin()
             for (uint8_t port = 0; port < m_trackData.size(); ++port)
             {
                 m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
+                m_trackData[port].lastChannelId = 0;
+                m_trackData[port].lastChannelData = 0;
             }
         }
         // TODO
@@ -176,10 +179,10 @@ void FeedbackDecoder::begin()
         setChannel(m_trackData[m_railcomDetectionPort].pin);
 
         // TODO remove when functioning
-        m_trackData[0].adress[0] = 0x8022;
-        m_trackData[2].adress[0] = 0x0023;
-        m_trackData[4].adress[0] = 0xC024;
-        m_trackData[7].adress[0] = 0x8025;
+        m_trackData[0].railcomData[0].address = 0x8022;
+        m_trackData[2].railcomData[0].address = 0x0023;
+        m_trackData[4].railcomData[0].address = 0xC024;
+        m_trackData[7].railcomData[0].address = 0x8025;
 
         m_trackData[0].state = true;
         m_trackData[2].state = true;
@@ -204,8 +207,6 @@ void FeedbackDecoder::begin()
     {
         m_printFunc("Offset port %d: %d\n", port, m_trackData[port].voltageOffset);
     }
-    // this is done outside of FeedbackDecoder
-    // pinMode(m_configIdPin, INPUT_PULLUP);
 
     // Wait random time before starting logging to Z21
     delay(millis());
@@ -240,22 +241,23 @@ void FeedbackDecoder::cyclic()
 
     if (Detection::Digital == m_detectionConfig)
     {
-        for (uint8_t port = 0; port < m_trackData.size(); ++port)
+        uint8_t port = 0;
+        for (auto &track : m_trackData)
         {
-            bool state = digitalRead(m_trackData[port].pin);
-            if (state != m_trackData[port].state)
+            bool state = digitalRead(track.pin);
+            if (state != track.state)
             {
-                m_trackData[port].changeReported = false;
-                m_trackData[port].state = state;
-                m_trackData[port].lastChangeTimeINms = currentTimeINms;
+                track.changeReported = false;
+                track.state = state;
+                track.lastChangeTimeINms = currentTimeINms;
             }
-            if (!m_trackData[port].changeReported)
+            if (!track.changeReported)
             {
                 if (state)
                 {
-                    if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
+                    if ((track.lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
                     {
-                        m_trackData[port].changeReported = true;
+                        track.changeReported = true;
                         notifyBlockOccupied(port, 0x01, state);
                         if (m_debug)
                             m_printFunc("port: %d state:%d\n", port, state);
@@ -263,15 +265,16 @@ void FeedbackDecoder::cyclic()
                 }
                 else
                 {
-                    if ((m_trackData[port].lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
+                    if ((track.lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
                     {
-                        m_trackData[port].changeReported = true;
+                        track.changeReported = true;
                         notifyBlockOccupied(port, 0x01, state);
                         if (m_debug)
                             m_printFunc("port: %d state:%d\n", port, state);
                     }
                 }
             }
+            port++;
         }
     }
 
@@ -300,7 +303,6 @@ void FeedbackDecoder::cyclic()
         if (m_currentSenseMeasurementMax <= m_currentSenseMeasurement)
         {
             m_currentSenseSum /= m_currentSenseMeasurementMax;
-            // m_printFunc("%u\n", m_currentSenseSum);
             bool state = m_currentSenseSum > m_trackSetVoltage;
             currentTimeINms = millis();
             if (state != m_trackData[m_currentSensePort].state)
@@ -317,6 +319,7 @@ void FeedbackDecoder::cyclic()
                     {
                         m_trackData[m_currentSensePort].changeReported = true;
                         notifyBlockOccupied(m_currentSensePort, 0x01, state);
+                        notifyLocoInBlock(m_currentSensePort, m_trackData[m_currentSensePort].railcomData);
                         if (m_debug)
                             m_printFunc("port: %d state:%d\n", m_currentSensePort, state);
                     }
@@ -327,6 +330,17 @@ void FeedbackDecoder::cyclic()
                     {
                         m_trackData[m_currentSensePort].changeReported = true;
                         notifyBlockOccupied(m_currentSensePort, 0x01, state);
+                        if (Detection::Railcom == m_detectionConfig)
+                        {
+
+                            for (auto &railcomData : m_trackData[m_currentSensePort].railcomData)
+                            {
+
+                                railcomData.address = 0;
+                                railcomData.lastChangeTimeINms = millis();
+                            }
+                            notifyLocoInBlock(m_currentSensePort, m_trackData[m_currentSensePort].railcomData);
+                        }
                         if (m_debug)
                             m_printFunc("port: %d state:%d\n", m_currentSensePort, state);
                     }
@@ -359,64 +373,107 @@ void FeedbackDecoder::cyclic()
             if (!m_railcomDataProcessed)
             {
                 m_railcomDataProcessed = true;
-                m_printFunc("RailcomRead finished\n");
-                m_printFunc("Offset: %d\n", m_trackData[m_railcomDetectionPort].voltageOffset);
+                std::array<uint16_t, 512> dmaBuffer;
+                dmaBuffer = m_adcDmaBuffer;
+                // m_printFunc("RailcomRead finished\n");
+                // m_printFunc("Offset: %d\n", m_trackData[m_railcomDetectionPort].voltageOffset);
                 auto iteratorBit = m_bitStreamDataBuffer.begin();
-                for (auto iteratorDma = m_adcDmaBuffer.begin(); iteratorDma != m_adcDmaBuffer.end(); iteratorDma++, iteratorBit++)
+                for (const auto &dmaData : dmaBuffer)
                 {
-                    if (*iteratorDma > m_trackData[m_railcomDetectionPort].voltageOffset)
+                    if (dmaData > m_trackData[m_railcomDetectionPort].voltageOffset)
                     {
-                        *iteratorBit = ((*iteratorDma - m_trackData[m_railcomDetectionPort].voltageOffset) < m_trackSetVoltage);
+                        *iteratorBit = ((dmaData - m_trackData[m_railcomDetectionPort].voltageOffset) < m_trackSetVoltage);
                     }
                     else
                     {
-                        *iteratorBit = ((m_trackData[m_railcomDetectionPort].voltageOffset - *iteratorDma) < m_trackSetVoltage);
+                        *iteratorBit = ((m_trackData[m_railcomDetectionPort].voltageOffset - dmaData) < m_trackSetVoltage);
                     }
-                    // m_printFunc("%d\t%d\n", *iteratorDma, *iteratorBit);
-                    m_printFunc("%d\n", *iteratorBit);
-                    // m_printFunc("%d\n", *iteratorDma);
+                    iteratorBit++;
                 }
 
                 // TODO
                 // Analyze direction after getting array with position of uart
 
                 std::array<uint8_t, 8> railcomData;
-                Railcom::handleBitStream(m_bitStreamDataBuffer.begin(), m_bitStreamDataBuffer.size() - 100, railcomData);
+                railcomData.fill(0);
 
-                for (auto iter = railcomData.begin(); iter != railcomData.end(); iter++)
+                // m_printFunc("\n");
+                // for (auto iter = m_bitStreamDataBuffer.begin(); iter != m_bitStreamDataBuffer.end(); iter++)
+                // {
+                //     m_printFunc("%X,", *iter);
+                // }
+                // m_printFunc("\n");
+                uint8_t numberOfBytes = Railcom::handleBitStream(m_bitStreamDataBuffer.begin(), 400, railcomData);
+                if (numberOfBytes > 2)
                 {
-                    m_printFunc("%X ");
+                    // handle channel 2 data
                 }
-                m_printFunc("\n");
+                // handle channel 1 data
+                uint8_t railcomId = railcomData[0] >> 2;
+                uint16_t railcomValue = ((railcomData[0] & 0x03) << 6) | (railcomData[1] & 0x3F);
+                uint16_t locoAddr{0};
+                if ((0x02 == m_trackData[m_railcomDetectionPort].lastChannelId) && (0x01 == railcomId))
+                {
+                    locoAddr = (railcomValue << 8) | (m_trackData[m_railcomDetectionPort].lastChannelData & 0xFF);
+                }
+                else if ((0x01 == m_trackData[m_railcomDetectionPort].lastChannelId) && (0x02 == railcomId))
+                {
+                    locoAddr = (m_trackData[m_railcomDetectionPort].lastChannelData & 0xFF00) | railcomValue;
+                }
+
+                m_trackData[m_railcomDetectionPort].lastChannelId = railcomId;
+                m_trackData[m_railcomDetectionPort].lastChannelData = railcomValue;
+
+                if (locoAddr != 0)
+                {
+                    auto addressBlock = m_trackData[m_railcomDetectionPort].railcomData.end();
+                    for (auto &data : m_trackData[m_railcomDetectionPort].railcomData)
+                    {
+                        if (locoAddr == data.address)
+                        {
+                            addressBlock = &data;
+                        }
+                    }
+                    if (m_trackData[m_railcomDetectionPort].railcomData.end() != addressBlock)
+                    {
+                        addressBlock->lastChangeTimeINms = millis();
+                    }
+                    else
+                    {
+                        // value not in table, find a block for it. If full, ignore value
+                        for (auto &data : m_trackData[m_railcomDetectionPort].railcomData)
+                        {
+                            if (0 == data.address)
+                            {
+                                data.address = locoAddr;
+                                addressBlock->lastChangeTimeINms = millis();
+                                notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_currentSensePort].railcomData);
+                            }
+                        }
+                    }
+                }
+
+                // for (auto iter = railcomData.begin(); iter != railcomData.end(); iter++)
+                // {
+                //     m_printFunc("%X ", *iter);
+                // }
+                // m_printFunc("\n");
+                // m_printFunc("%u . %u\n", (railcomData[0]>>2), ((railcomData[0] & 0x03) << 6) | railcomData[1]);
             }
 
-            /*
-            byte data = RailComDecodeInData();   //read Railcom Data and decode Railcom Data
-          if (data < 0x40) {    //gültige Railcom Message empfangen
-                if (RailComReadFirst) {
-                  RailComReadData = data;   //Save first Byte of Data
-                  if ((data >> 2) < 3)  //app:pom, app:adr_low, app:adr_high -> read only 12 Bit!
-                    RailComReadFirst = false;
+            // check for address data which was not renewed
+            for (auto &data : m_trackData[m_railcomDetectionPort].railcomData)
+            {
+                if (0 != data.address)
+                {
+                    if ((m_railcomDataTimeoutINms + data.lastChangeTimeINms) < millis())
+                    {
+                        data.address = 0;
+                        // TODO: save portnumber with trackData to use more for functions
+                        // notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_currentSensePort].railcomData);
+                    }
                 }
-                else {
-                  RailComReadFirst = true;
-                  byte RailComID = RailComReadData >> 2; //Save ID
-                  RailComReadData = (RailComReadData << 6) | data;    //first 2 Bit and add next 6 Bit
-                  if (RailComID == 0) { //app:pom
-                      RailComCVTime = 25; //Reset Timer!
-                      RailComReadLastCV = RailComReadData;
-                      RailComCVRead = true;
-                  }
-                  else if (RailComID == 1) { //app:adr_high
-                    RailComReadAdr = (RailComReadData << 8) | (RailComReadAdr & 0xFF);
-                  }
-                  else if (RailComID == 2) {  //app:adr_low
-                    RailComReadAdr = (RailComReadAdr & 0xFF00) | RailComReadData;
-                  }
-                }
-          }
-          else RailComReadFirst = true;
-          */
+            }
         }
     }
 }
@@ -444,6 +501,8 @@ void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
         // m_railcomDetectionMeasurement++;
         // if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
         // {
+        //     m_trackData[m_railcomDetectionPort].lastChannelId = 0;
+        //     m_trackData[m_railcomDetectionPort].lastChannelData = 0;
         //     m_railcomDetectionMeasurement = 0;
         //     m_railcomDetectionPort++;
         // }
@@ -468,10 +527,12 @@ void FeedbackDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
     configSingleMeasurementMode();
 }
 
-bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, uint16_t adress1, uint16_t adress2, uint16_t adress3, uint16_t adress4)
+bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, std::array<RailcomData, 4> railcomData)
 {
-    bool result = sendAccessoryDataEvt(m_modulId, port, 0x11, adress1, adress2);
-    result &= sendAccessoryDataEvt(m_modulId, port, 0x12, adress3, adress4);
+    bool result = sendAccessoryDataEvt(m_modulId, port, 0x11,
+                                       (railcomData[0].direction << 14) | railcomData[0].address, (railcomData[1].direction << 14) | railcomData[1].address);
+    result &= sendAccessoryDataEvt(m_modulId, port, 0x12,
+                                   (railcomData[2].direction << 14) | railcomData[2].address, (railcomData[3].direction << 14) | railcomData[3].address);
     return result;
 }
 
@@ -500,13 +561,13 @@ bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_
             {
                 if (m_debug)
                     m_printFunc("onAccessoryData\n");
-                result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].adress[0], m_trackData[port].adress[1]);
+                result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].railcomData[0].address, m_trackData[port].railcomData[1].address);
             }
             else if (0x12 == type)
             {
                 if (m_debug)
                     m_printFunc("onAccessoryData\n");
-                result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].adress[2], m_trackData[port].adress[3]);
+                result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].railcomData[2].address, m_trackData[port].railcomData[3].address);
             }
         }
     }

@@ -41,9 +41,9 @@ public:
         std::array<uint16_t, 8> voltageOffset;
     } ModulConfig;
 
-    enum class Detection:uint8_t
+    enum class Detection : uint8_t
     {
-        Digital=0,
+        Digital = 0,
         CurrentSense,
         Railcom
     };
@@ -118,24 +118,28 @@ protected:
     // modul type of feedback decoder
     uint16_t m_modulType{roco10808Type};
 
-    // adress is 0x8000 up tp 0xC000
-    bool notifyLocoInBlock(uint8_t port, uint16_t adress1, uint16_t adress2, uint16_t adress3, uint16_t adress4);
-
-    bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
+    typedef struct
+    {
+        uint16_t address;
+        uint16_t direction;
+        unsigned long lastChangeTimeINms;
+    } RailcomData;
 
     typedef struct
     {
         int pin;
         bool state;
         bool changeReported;
-        std::array<uint16_t, 4> adress;
-        uint16_t lastChannelData1;
-        uint16_t lastChannelData2;
+        std::array<RailcomData, 4> railcomData;
+        uint8_t lastChannelId;
+        uint16_t lastChannelData;
         uint16_t voltageOffset;
         unsigned long lastChangeTimeINms;
     } TrackData;
 
     std::array<TrackData, 8> m_trackData;
+
+    unsigned long m_railcomDataTimeoutINms{1000};
 
     uint8_t m_currentSensePort;
 
@@ -160,6 +164,11 @@ protected:
     bool m_railcomCutOutActive;
 
     bool m_railcomDataProcessed;
+
+    // adress is 0x8000 up tp 0xC000
+    bool notifyLocoInBlock(uint8_t port, std::array<RailcomData, 4> railcomData);
+
+    bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
 
 private:
     ModulConfig &m_modulConfig;
