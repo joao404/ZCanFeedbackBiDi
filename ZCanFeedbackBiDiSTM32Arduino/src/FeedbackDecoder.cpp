@@ -148,6 +148,12 @@ void FeedbackDecoder::begin()
                 m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
                 m_trackData[port].lastChannelId = 0;
                 m_trackData[port].lastChannelData = 0;
+                for (auto &railcomData : m_trackData[port].railcomData)
+                {
+
+                    railcomData.address = 0;
+                    railcomData.lastChangeTimeINms = millis();
+                }
             }
         }
         // TODO
@@ -158,16 +164,16 @@ void FeedbackDecoder::begin()
         setChannel(m_trackData[m_railcomDetectionPort].pin);
 
         // TODO remove when functioning
-        m_trackData[0].railcomData[0].address = 0x8022;
-        m_trackData[2].railcomData[0].address = 0x0023;
-        m_trackData[4].railcomData[0].address = 0xC024;
-        m_trackData[7].railcomData[0].address = 0x8025;
+        // m_trackData[0].railcomData[0].address = 0x8022;
+        // m_trackData[2].railcomData[0].address = 0x0023;
+        // m_trackData[4].railcomData[0].address = 0xC024;
+        // m_trackData[7].railcomData[0].address = 0x8025;
 
-        m_trackData[0].state = true;
-        m_trackData[2].state = true;
-        m_trackData[4].state = true;
-        m_trackData[6].state = true;
-        m_trackData[7].state = true;
+        // m_trackData[0].state = true;
+        // m_trackData[2].state = true;
+        // m_trackData[4].state = true;
+        // m_trackData[6].state = true;
+        // m_trackData[7].state = true;
     }
     else
     {
@@ -391,13 +397,13 @@ void FeedbackDecoder::cyclic()
                 uint8_t railcomId = railcomData[0] >> 2;
                 uint16_t railcomValue = ((railcomData[0] & 0x03) << 6) | (railcomData[1] & 0x3F);
                 uint16_t locoAddr{0};
-                if ((0x02 == m_trackData[m_railcomDetectionPort].lastChannelId) && (0x01 == railcomId))
+                // if ((0x02 == m_trackData[m_railcomDetectionPort].lastChannelId) && (0x01 == railcomId))
+                // {
+                //     locoAddr = ((railcomValue & 0x3F)<< 8) | (m_trackData[m_railcomDetectionPort].lastChannelData & 0xFF);
+                // }
+                if ((0x01 == m_trackData[m_railcomDetectionPort].lastChannelId) && (0x02 == railcomId))
                 {
-                    locoAddr = (railcomValue << 8) | (m_trackData[m_railcomDetectionPort].lastChannelData & 0xFF);
-                }
-                else if ((0x01 == m_trackData[m_railcomDetectionPort].lastChannelId) && (0x02 == railcomId))
-                {
-                    locoAddr = (m_trackData[m_railcomDetectionPort].lastChannelData & 0xFF00) | railcomValue;
+                    locoAddr = ((m_trackData[m_railcomDetectionPort].lastChannelData & 0x3F) << 8) | railcomValue;
                 }
 
                 m_trackData[m_railcomDetectionPort].lastChannelId = railcomId;
@@ -405,19 +411,17 @@ void FeedbackDecoder::cyclic()
 
                 if (locoAddr != 0)
                 {
-                    auto addressBlock = m_trackData[m_railcomDetectionPort].railcomData.end();
+                    bool addressFound{false};
                     for (auto &data : m_trackData[m_railcomDetectionPort].railcomData)
                     {
                         if (locoAddr == data.address)
                         {
-                            addressBlock = &data;
+                            data.lastChangeTimeINms = millis();
+                            addressFound = true;
+                            break;
                         }
                     }
-                    if (m_trackData[m_railcomDetectionPort].railcomData.end() != addressBlock)
-                    {
-                        addressBlock->lastChangeTimeINms = millis();
-                    }
-                    else
+                    if (!addressFound)
                     {
                         // value not in table, find a block for it. If full, ignore value
                         for (auto &data : m_trackData[m_railcomDetectionPort].railcomData)
@@ -425,8 +429,10 @@ void FeedbackDecoder::cyclic()
                             if (0 == data.address)
                             {
                                 data.address = locoAddr;
-                                addressBlock->lastChangeTimeINms = millis();
+                                data.lastChangeTimeINms = millis();
+                                m_printFunc("Loco appeared:0x%X\n", locoAddr);
                                 notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_currentSensePort].railcomData);
+                                break;
                             }
                         }
                     }
@@ -447,6 +453,7 @@ void FeedbackDecoder::cyclic()
                 {
                     if ((m_railcomDataTimeoutINms + data.lastChangeTimeINms) < millis())
                     {
+                        m_printFunc("Loco left:0x%X\n", data.address);
                         data.address = 0;
                         // TODO: save portnumber with trackData to use more for functions
                         // notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_currentSensePort].railcomData);
@@ -477,18 +484,19 @@ void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
         m_railcomCutOutActive = true;
         m_railcomDataProcessed = true;
         configContinuousDmaMode();
-        // m_railcomDetectionMeasurement++;
-        // if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
-        // {
-        //     m_trackData[m_railcomDetectionPort].lastChannelId = 0;
-        //     m_trackData[m_railcomDetectionPort].lastChannelData = 0;
-        //     m_railcomDetectionMeasurement = 0;
-        //     m_railcomDetectionPort++;
-        // }
-        // if (sizeof(m_trackData) <= m_railcomDetectionPort)
-        // {
-        //     m_railcomDetectionPort = 0;
-        // }
+        m_railcomDetectionMeasurement++;
+        if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
+        {
+            m_trackData[m_railcomDetectionPort].lastChannelId = 0;
+            m_trackData[m_railcomDetectionPort].lastChannelData = 0;
+            m_railcomDetectionMeasurement = 0;
+            m_railcomDetectionPort++;
+        }
+        if (m_trackData.size() <= m_railcomDetectionPort)
+        {
+            m_railcomDetectionPort = 0;
+        }
+        // m_printFunc("%d\n", m_railcomDetectionPort);
         // after DMA was executed, configure next channel already to save time
         setChannel(m_trackData[m_railcomDetectionPort].pin);
         HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBuffer.begin(), m_adcDmaBuffer.size());
