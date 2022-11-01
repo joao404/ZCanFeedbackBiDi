@@ -41,8 +41,9 @@
 #include "Arduino.h"
 
 FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
-                                 int configAnalogOffsetPin, int configIdPin, bool debug, bool zcanDebug, void (*printFunc)(const char *, ...))
+                                 int configAnalogOffsetPin, int configIdPin, bool debug, bool zcanDebug, bool railcomDebug, void (*printFunc)(const char *, ...))
     : ZCanInterfaceObserver(zcanDebug, printFunc),
+      Railcom(railcomDebug, printFunc),
       m_debug(debug),
       m_saveDataFkt(saveDataFkt),
       m_detectionConfig(detectionConfig),
@@ -55,7 +56,6 @@ FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(v
     for (uint8_t i = 0; (i < sizeTrackData) && (i < sizeTrackPin); ++i)
     {
         m_trackData[i].pin = trackPin[i];
-        m_trackData[i].railcomAddr.fill({});
         m_trackData[i].changeReported = true; // first report is already done
     }
 }
@@ -102,12 +102,12 @@ void FeedbackDecoder::begin()
     // I have a 22 Ohm resistor so 0.8mV per Count * 22 * current is offset down below
     // so I take 8*22 = 17,6 is round about 18
     m_trackSetVoltage = 18 * m_modulConfig.trackConfig.trackSetCurrentINmA;
-    m_printFunc("SW Version: 0x%08X, build date: 0x%08X\n", m_firmwareVersion, m_buildDate);
-    m_printFunc("NetworkId %x MA %x CH2 %x\n", m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
-    m_printFunc("trackSetCurrentINmA: %d\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
-    m_printFunc("trackFreeToSetTimeINms: %d\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
-    m_printFunc("trackSetToFreeTimeINms: %d\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
-    m_printFunc("trackSetVoltage: %d\n", m_trackSetVoltage);
+    ZCanInterfaceObserver::m_printFunc("SW Version: 0x%08X, build date: 0x%08X\n", m_firmwareVersion, m_buildDate);
+    ZCanInterfaceObserver::m_printFunc("NetworkId %x MA %x CH2 %x\n", m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
+    ZCanInterfaceObserver::m_printFunc("trackSetCurrentINmA: %d\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
+    ZCanInterfaceObserver::m_printFunc("trackFreeToSetTimeINms: %d\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
+    ZCanInterfaceObserver::m_printFunc("trackSetToFreeTimeINms: %d\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
+    ZCanInterfaceObserver::m_printFunc("trackSetVoltage: %d\n", m_trackSetVoltage);
 
     m_pingJitterINms = std::max((uint32_t)0, std::min((micros() / 10), (uint32_t)100));
     m_pingIntervalINms = (9990 - m_pingJitterINms);
@@ -116,7 +116,7 @@ void FeedbackDecoder::begin()
 
     if (Detection::Railcom == m_detectionConfig)
     {
-        m_printFunc("Railcom active\n");
+        ZCanInterfaceObserver::m_printFunc("Railcom active\n");
     }
 
     if ((Detection::Railcom == m_detectionConfig) || (Detection::CurrentSense == m_detectionConfig))
@@ -137,7 +137,7 @@ void FeedbackDecoder::begin()
                 // Read The ADC Conversion Result & Map It To PWM DutyCycle
                 m_trackData[port].voltageOffset = HAL_ADC_GetValue(&hadc1);
                 m_modulConfig.voltageOffset[port] = m_trackData[port].voltageOffset;
-                m_printFunc("Offset port %d: %d\n", port, m_modulConfig.voltageOffset[port]);
+                ZCanInterfaceObserver::m_printFunc("Offset port %d: %d\n", port, m_modulConfig.voltageOffset[port]);
             }
             m_saveDataFkt();
         }
@@ -146,14 +146,6 @@ void FeedbackDecoder::begin()
             for (uint8_t port = 0; port < m_trackData.size(); ++port)
             {
                 m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
-                m_trackData[port].lastChannelId = 0;
-                m_trackData[port].lastChannelData = 0;
-                for (auto &railcomAddr : m_trackData[port].railcomAddr)
-                {
-
-                    railcomAddr.address = 0;
-                    railcomAddr.lastChangeTimeINms = millis();
-                }
             }
         }
         setChannel(m_trackData[m_railcomDetectionPort].pin);
@@ -167,13 +159,13 @@ void FeedbackDecoder::begin()
             notifyBlockOccupied(port, 0x01, m_trackData[port].state);
             m_trackData[port].lastChangeTimeINms = millis();
             if (m_debug)
-                m_printFunc("port: %d state:%d\n", port, m_trackData[port].state);
+                ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", port, m_trackData[port].state);
         }
     }
 
     for (uint8_t port = 0; port < m_trackData.size(); ++port)
     {
-        m_printFunc("Offset port %d: %d\n", port, m_trackData[port].voltageOffset);
+        ZCanInterfaceObserver::m_printFunc("Offset port %d: %d\n", port, m_trackData[port].voltageOffset);
     }
 
     // Wait random time before starting logging to Z21
@@ -181,7 +173,7 @@ void FeedbackDecoder::begin()
     // Send first ping
     sendPing(m_masterId, m_modulType, m_sessionId);
 
-    m_printFunc("%X finished config\n", m_networkId);
+    ZCanInterfaceObserver::m_printFunc("%X finished config\n", m_networkId);
 }
 
 void FeedbackDecoder::cyclic()
@@ -245,7 +237,7 @@ void FeedbackDecoder::cyclic()
             bool state = m_currentSenseSum > m_trackSetVoltage;
             auto trackSetFkt = [this]()
             {
-                notifyLocoInBlock(m_detectionPort, m_trackData[m_detectionPort].railcomAddr);
+                notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
             };
 
             auto trackResetFkt = [this]()
@@ -253,13 +245,13 @@ void FeedbackDecoder::cyclic()
                 if (Detection::Railcom == m_detectionConfig)
                 {
 
-                    for (auto &railcomAddr : m_trackData[m_detectionPort].railcomAddr)
+                    for (auto &railcomAddr : m_railcomData[m_detectionPort].railcomAddr)
                     {
 
                         railcomAddr.address = 0;
                         railcomAddr.lastChangeTimeINms = millis();
                     }
-                    notifyLocoInBlock(m_detectionPort, m_trackData[m_detectionPort].railcomAddr);
+                    notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
                 }
             };
             portStatusCheck(state, trackSetFkt, trackResetFkt);
@@ -281,88 +273,11 @@ void FeedbackDecoder::cyclic()
             std::array<uint16_t, 512> dmaBuffer;
             // copy DMA buffer to make sure that data is not overwritten in case that we take to long to analyze
             dmaBuffer = m_adcDmaBuffer;
-            auto iteratorBit = m_bitStreamDataBuffer.begin();
-            for (const auto &dmaData : dmaBuffer)
-            {
-                if (dmaData > m_trackData[m_railcomDetectionPort].voltageOffset)
-                {
-                    *iteratorBit = ((dmaData - m_trackData[m_railcomDetectionPort].voltageOffset) < m_trackSetVoltage);
-                }
-                else
-                {
-                    *iteratorBit = ((m_trackData[m_railcomDetectionPort].voltageOffset - dmaData) < m_trackSetVoltage);
-                }
-                iteratorBit++;
-            }
 
-            // TODO
-            // Analyze direction after getting array with position of uart
-
-            std::array<uint8_t, 8> railcomAddr;
-            railcomAddr.fill(0);
-
-            uint8_t numberOfBytes = Railcom::handleBitStream(m_bitStreamDataBuffer.begin(), 400, railcomAddr);
-            if (numberOfBytes > 2)
-            {
-                // handle channel 2 data
-                // TODO
-            }
-            // handle channel 1 data
-            uint8_t railcomId = railcomAddr[0] >> 2;
-            uint16_t railcomValue = ((railcomAddr[0] & 0x03) << 6) | (railcomAddr[1] & 0x3F);
-            uint16_t locoAddr{0};
-            if ((0x01 == m_trackData[m_railcomDetectionPort].lastChannelId) && (0x02 == railcomId))
-            {
-                locoAddr = ((m_trackData[m_railcomDetectionPort].lastChannelData & 0x3F) << 8) | railcomValue;
-            }
-
-            m_trackData[m_railcomDetectionPort].lastChannelId = railcomId;
-            m_trackData[m_railcomDetectionPort].lastChannelData = railcomValue;
-
-            if (locoAddr != 0)
-            {
-                bool addressFound{false};
-                for (auto &data : m_trackData[m_railcomDetectionPort].railcomAddr)
-                {
-                    if (locoAddr == data.address)
-                    {
-                        data.lastChangeTimeINms = millis();
-                        addressFound = true;
-                        break;
-                    }
-                }
-                if (!addressFound)
-                {
-                    // value not in table, find a block for it. If full, ignore value
-                    for (auto &data : m_trackData[m_railcomDetectionPort].railcomAddr)
-                    {
-                        if (0 == data.address)
-                        {
-                            data.address = locoAddr;
-                            data.lastChangeTimeINms = millis();
-                            m_printFunc("Loco appeared:0x%X\n", locoAddr);
-                            notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_detectionPort].railcomAddr);
-                            break;
-                        }
-                    }
-                }
-            }
+            handleRailcomData(dmaBuffer.begin(), 400, m_trackData[m_railcomDetectionPort].voltageOffset, m_trackSetVoltage);
         }
 
-        // check for address data which was not renewed
-        for (auto &data : m_trackData[m_railcomDetectionPort].railcomAddr)
-        {
-            if (0 != data.address)
-            {
-                if ((m_railcomDataTimeoutINms + data.lastChangeTimeINms) < millis())
-                {
-                    m_printFunc("Loco left:0x%X\n", data.address);
-                    data.address = 0;
-                    // TODO: save portnumber with trackData to use more for functions
-                    // notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_detectionPort].railcomAddr);
-                }
-            }
-        }
+        Railcom::cyclic();
     }
 }
 
@@ -384,12 +299,13 @@ void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
     {
         m_railcomCutOutActive = true;
         m_railcomDataProcessed = true;
+        m_lastRailcomAddress = addr;
         configContinuousDmaMode();
         m_railcomDetectionMeasurement++;
         if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
         {
-            m_trackData[m_railcomDetectionPort].lastChannelId = 0;
-            m_trackData[m_railcomDetectionPort].lastChannelData = 0;
+            m_railcomData[m_railcomDetectionPort].lastChannelId = 0;
+            m_railcomData[m_railcomDetectionPort].lastChannelData = 0;
             m_railcomDetectionMeasurement = 0;
             m_railcomDetectionPort++;
         }
@@ -397,7 +313,6 @@ void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
         {
             m_railcomDetectionPort = 0;
         }
-        // m_printFunc("%d\n", m_railcomDetectionPort);
         // after DMA was executed, configure next channel already to save time
         setChannel(m_trackData[m_railcomDetectionPort].pin);
         HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBuffer.begin(), m_adcDmaBuffer.size());
@@ -449,7 +364,7 @@ void FeedbackDecoder::portStatusCheck(bool state, std::function<void(void)> call
                 notifyBlockOccupied(m_detectionPort, 0x01, state);
                 callbackTrackSet();
                 if (m_debug)
-                    m_printFunc("port: %d state:%d\n", m_detectionPort, state);
+                    ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", m_detectionPort, state);
             }
         }
         else
@@ -460,10 +375,19 @@ void FeedbackDecoder::portStatusCheck(bool state, std::function<void(void)> call
                 notifyBlockOccupied(m_detectionPort, 0x01, state);
                 callbackTrackReset();
                 if (m_debug)
-                    m_printFunc("port: %d state:%d\n", m_detectionPort, state);
+                    ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", m_detectionPort, state);
             }
         }
     }
+}
+
+void FeedbackDecoder::callbackRailcomLocoAppeared(void)
+{
+    notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_detectionPort].railcomAddr);
+}
+
+void FeedbackDecoder::callbackRailcomLocoLeft(void)
+{
 }
 
 //---------------------------------------------------------------------------
@@ -487,14 +411,14 @@ bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_
             if (0x11 == type)
             {
                 if (m_debug)
-                    m_printFunc("onAccessoryData\n");
-                result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].railcomAddr[0].address, m_trackData[port].railcomAddr[1].address);
+                    ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
+                result = sendAccessoryDataAck(m_modulId, port, type, m_railcomData[port].railcomAddr[0].address, m_railcomData[port].railcomAddr[1].address);
             }
             else if (0x12 == type)
             {
                 if (m_debug)
-                    m_printFunc("onAccessoryData\n");
-                result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].railcomAddr[2].address, m_trackData[port].railcomAddr[3].address);
+                    ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
+                result = sendAccessoryDataAck(m_modulId, port, type, m_railcomData[port].railcomAddr[2].address, m_railcomData[port].railcomAddr[3].address);
             }
         }
     }
@@ -512,7 +436,7 @@ bool FeedbackDecoder::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8
             {
                 result = sendAccessoryDataAck(m_modulId, port, type, m_trackData[port].state ? 0x1100 : 0x0100, 0);
                 if (m_debug)
-                    m_printFunc("onAccessoryPort6\n");
+                    ZCanInterfaceObserver::m_printFunc("onAccessoryPort6\n");
             }
         }
     }
@@ -525,7 +449,7 @@ bool FeedbackDecoder::onRequestModulInfo(uint16_t id, uint16_t type)
     if (id == m_networkId)
     {
         if (m_debug)
-            m_printFunc("onRequestModulInfo\n");
+            ZCanInterfaceObserver::m_printFunc("onRequestModulInfo\n");
         result = true;
         switch (type)
         {
@@ -560,7 +484,7 @@ bool FeedbackDecoder::onModulPowerInfoEvt(uint16_t nid, uint8_t port, uint16_t s
 {
     if (m_debug)
     {
-        m_printFunc("onModulPowerInfoEvt\n");
+        ZCanInterfaceObserver::m_printFunc("onModulPowerInfoEvt\n");
     }
     return true;
 }
@@ -569,7 +493,7 @@ bool FeedbackDecoder::onModulPowerInfoAck(uint16_t nid, uint8_t port, uint16_t s
 {
     if (m_debug)
     {
-        m_printFunc("onModulPowerInfoAck\n");
+        ZCanInterfaceObserver::m_printFunc("onModulPowerInfoAck\n");
     }
     return true;
 }
@@ -580,7 +504,7 @@ bool FeedbackDecoder::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
     if (id == m_networkId)
     {
         if (m_debug)
-            m_printFunc("onCmdModulInfo\n");
+            ZCanInterfaceObserver::m_printFunc("onCmdModulInfo\n");
         result = true;
         switch (type)
         {
@@ -608,7 +532,7 @@ bool FeedbackDecoder::onRequestModulObjectConfig(uint16_t id, uint32_t tag)
     if (id == m_networkId)
     {
         if (m_debug)
-            m_printFunc("onRequestModulObjectConfig\n");
+            ZCanInterfaceObserver::m_printFunc("onRequestModulObjectConfig\n");
         uint16_t value{0};
         switch (tag)
         {
@@ -679,7 +603,7 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
         case 0x00221001:
             m_modulConfig.sendChannel2Data = ((value & 0x0010) == 0x0010) ? 1 : 0;
             if (m_debug)
-                m_printFunc("Write Send Channel 2 %u\n", m_modulConfig.sendChannel2Data);
+                ZCanInterfaceObserver::m_printFunc("Write Send Channel 2 %u\n", m_modulConfig.sendChannel2Data);
             m_saveDataFkt();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
@@ -689,8 +613,8 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
             m_trackSetVoltage = 18 * value;
             if (m_debug)
             {
-                m_printFunc("Write SetCurrent %u\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
-                m_printFunc("Write track set voltage %u\n", m_trackSetVoltage);
+                ZCanInterfaceObserver::m_printFunc("Write SetCurrent %u\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
+                ZCanInterfaceObserver::m_printFunc("Write track set voltage %u\n", m_trackSetVoltage);
             }
             m_saveDataFkt();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
@@ -699,7 +623,7 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
         case 0x00501001:
             m_modulConfig.trackConfig.trackFreeToSetTimeINms = value;
             if (m_debug)
-                m_printFunc("Write FreeToSetTime %u\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
+                ZCanInterfaceObserver::m_printFunc("Write FreeToSetTime %u\n", m_modulConfig.trackConfig.trackFreeToSetTimeINms);
             m_saveDataFkt();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
@@ -707,14 +631,14 @@ bool FeedbackDecoder::onCmdModulObjectConfig(uint16_t id, uint32_t tag, uint16_t
         case 0x00511001:
             m_modulConfig.trackConfig.trackSetToFreeTimeINms = value;
             if (m_debug)
-                m_printFunc("Write SetToFreeTime %u\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
+                ZCanInterfaceObserver::m_printFunc("Write SetToFreeTime %u\n", m_modulConfig.trackConfig.trackSetToFreeTimeINms);
             m_saveDataFkt();
             result = sendModuleObjectConfigAck(m_modulId, tag, value);
             break;
 
         default:
             // all other values are handled
-            m_printFunc("Handle tag %x\n", tag);
+            ZCanInterfaceObserver::m_printFunc("Handle tag %x\n", tag);
             result = true;
             break;
         }
@@ -738,7 +662,7 @@ bool FeedbackDecoder::onPing(uint16_t id, uint32_t masterUid, uint16_t type, uin
     {
         if (m_debug)
         {
-            m_printFunc("New master %x\n", masterUid);
+            ZCanInterfaceObserver::m_printFunc("New master %x\n", masterUid);
         }
         m_masterId = masterUid;
         m_sessionId = sessionId;

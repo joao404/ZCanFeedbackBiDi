@@ -20,7 +20,7 @@
 #include "Stm32f1/adc.h"
 #include "Railcom.h"
 
-class FeedbackDecoder : public ZCanInterfaceObserver
+class FeedbackDecoder : public ZCanInterfaceObserver, public Railcom
 {
 public:
     // every variable must have size of 16 bits to fit memory layout
@@ -49,7 +49,7 @@ public:
     };
 
     FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
-                    int configAnalogOffsetPin, int configIdPin, bool debug, bool zcanDebug, void (*printFunc)(const char *, ...) = nullptr);
+                    int configAnalogOffsetPin, int configIdPin, bool debug, bool zcanDebug, bool railcomDebug, void (*printFunc)(const char *, ...) = nullptr);
     virtual ~FeedbackDecoder();
 
     void begin();
@@ -98,7 +98,7 @@ protected:
     // ping for configuration of modul adress
     int m_configIdPin;
 
-    uint16_t m_modulId {0};
+    uint16_t m_modulId{0};
 
     uint32_t m_idPrgStartTimeINms{0};
 
@@ -120,26 +120,14 @@ protected:
 
     typedef struct
     {
-        uint16_t address;
-        uint16_t direction;
-        uint32_t lastChangeTimeINms;
-    } RailcomAddr;
-
-    typedef struct
-    {
         int pin;
         bool state;
         bool changeReported;
-        std::array<RailcomAddr, 4> railcomAddr;
-        uint8_t lastChannelId;
-        uint16_t lastChannelData;
         uint16_t voltageOffset;
         uint32_t lastChangeTimeINms;
     } TrackData;
 
     std::array<TrackData, 8> m_trackData;
-
-    uint32_t m_railcomDataTimeoutINms{1000};
 
     uint8_t m_detectionPort{0};
 
@@ -149,15 +137,7 @@ protected:
 
     uint16_t m_currentSenseSum{0};
 
-    uint8_t m_railcomDetectionPort{0};
-
-    uint8_t m_railcomDetectionMeasurement{0};
-
-    const uint8_t m_maxNumberOfConsecutiveMeasurements{4};
-
     std::array<uint16_t, 512> m_adcDmaBuffer;
-
-    std::array<bool, 512> m_bitStreamDataBuffer;
 
     uint16_t m_trackSetVoltage{0};
 
@@ -172,10 +152,14 @@ protected:
 
     void portStatusCheck(bool state, std::function<void(void)> callbackTrackSet, std::function<void(void)> callbackTrackReset);
 
+    void callbackRailcomLocoAppeared(void);
+
+    void callbackRailcomLocoLeft(void);
+
 private:
     ModulConfig &m_modulConfig;
 
     uint32_t m_firmwareVersion{0x05010014}; // 5.1.20
-    uint32_t m_buildDate{0x07E60917}; // 23.09.2022
-    uint32_t m_hardwareVersion{0x05010001}; // 5.1.1 
+    uint32_t m_buildDate{0x07E60917};       // 23.09.2022
+    uint32_t m_hardwareVersion{0x05010001}; // 5.1.1
 };

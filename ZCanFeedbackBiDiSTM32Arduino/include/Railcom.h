@@ -21,13 +21,60 @@
 class Railcom
 {
 public:
-    Railcom(){};
-    virtual ~Railcom(){};
+    typedef struct
+    {
+        uint16_t address;
+        uint16_t direction;
+        uint32_t lastChangeTimeINms;
+    } RailcomAddr;
 
-    static bool getStartAndStopByteOfUart(bool* bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex, size_t* findStartIndex, size_t* findEndIndex);
-    static uint8_t handleBitStream(bool bitStreamIN1samplePer1us[], size_t length, std::array<uint8_t, 8> &railcomAddr);
+    typedef struct
+    {
+        std::array<RailcomAddr, 4> railcomAddr;
+        uint8_t lastChannelId;
+        uint16_t lastChannelData;
+    } RailcomData;
 
-static uint8_t encode4to8[];
-static uint8_t encode8to4[];
+    Railcom(bool debug, void (*printFunc)(const char *, ...) = nullptr);
+    virtual ~Railcom();
+
+protected:
+    void cyclic();
+
+    void handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t length, uint16_t voltageOffset, uint16_t trackSetVoltage);
+
+    bool getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex, size_t *findStartIndex, size_t *findEndIndex);
+
+    uint8_t handleBitStream(bool bitStreamIN1samplePer1us[], size_t length, std::array<uint8_t, 8> &railcomData, std::array<int8_t, 8> &railcomDirection, uint16_t voltageOffset);
+
+    void handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction);
+    
+    virtual void callbackRailcomLocoAppeared(void) = 0;
+
+    virtual void callbackRailcomLocoLeft(void) = 0;
+
+    bool m_debug;
+
+    void (*m_printFunc)(const char *, ...);
+
+    uint16_t* m_dmaBufferIN1samplePer1us;
+
+    uint16_t m_lastRailcomAddress{0};
+
+    uint32_t m_railcomDataTimeoutINms{1000};
+
+    std::array<RailcomData, 8> m_railcomData;
+
+    uint8_t m_railcomDetectionPort{0};
+
+    uint8_t m_railcomDetectionMeasurement{0};
+
+    const uint8_t m_maxNumberOfConsecutiveMeasurements{4};
+    
+    uint16_t m_channel1Direction{0};
+
+    uint16_t m_channel2Direction{0};
+
+    static uint8_t encode4to8[];
+    static uint8_t encode8to4[];
 };
-
