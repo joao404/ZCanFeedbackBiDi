@@ -45,7 +45,7 @@ bool Railcom::getStartAndStopByteOfUart(bool* bitStreamIN1samplePer1us, size_t s
     return true;
 }
 
-uint8_t Railcom::handleBitStream(bool* bitStreamIN1samplePer1us, size_t length, std::array<uint8_t, 8> &railcomData)
+uint8_t Railcom::handleBitStream(bool* bitStreamIN1samplePer1us, size_t length, std::array<uint8_t, 8> &railcomAddr)
 {
     // search for starting zero of first byte by ignoring first 15us
     size_t startIndex {0};
@@ -53,7 +53,7 @@ uint8_t Railcom::handleBitStream(bool* bitStreamIN1samplePer1us, size_t length, 
     size_t dataBeginIndex {0};
     uint8_t numberOfBytes{0};
 
-    for (auto dataIterator = railcomData.begin(); dataIterator != railcomData.end(); dataIterator++)
+    for (auto dataIterator = railcomAddr.begin(); dataIterator != railcomAddr.end(); dataIterator++)
     {
         *dataIterator = 0xFF;
         if (Railcom::getStartAndStopByteOfUart(bitStreamIN1samplePer1us, dataBeginIndex, length - 1, &startIndex, &endIndex))

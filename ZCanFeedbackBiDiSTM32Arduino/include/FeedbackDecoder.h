@@ -122,26 +122,26 @@ protected:
     {
         uint16_t address;
         uint16_t direction;
-        unsigned long lastChangeTimeINms;
-    } RailcomData;
+        uint32_t lastChangeTimeINms;
+    } RailcomAddr;
 
     typedef struct
     {
         int pin;
         bool state;
         bool changeReported;
-        std::array<RailcomData, 4> railcomData;
+        std::array<RailcomAddr, 4> railcomAddr;
         uint8_t lastChannelId;
         uint16_t lastChannelData;
         uint16_t voltageOffset;
-        unsigned long lastChangeTimeINms;
+        uint32_t lastChangeTimeINms;
     } TrackData;
 
     std::array<TrackData, 8> m_trackData;
 
-    unsigned long m_railcomDataTimeoutINms{1000};
+    uint32_t m_railcomDataTimeoutINms{1000};
 
-    uint8_t m_currentSensePort{0};
+    uint8_t m_detectionPort{0};
 
     uint8_t m_currentSenseMeasurement{0};
 
@@ -166,9 +166,11 @@ protected:
     bool m_railcomDataProcessed{true};
 
     // adress is 0x8000 up tp 0xC000
-    bool notifyLocoInBlock(uint8_t port, std::array<RailcomData, 4> railcomData);
+    bool notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr);
 
     bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
+
+    void portStatusCheck(bool state, std::function<void(void)> callbackTrackSet, std::function<void(void)> callbackTrackReset);
 
 private:
     ModulConfig &m_modulConfig;
