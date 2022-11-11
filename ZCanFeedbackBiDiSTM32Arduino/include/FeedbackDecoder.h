@@ -152,9 +152,9 @@ protected:
 
     void portStatusCheck(bool state, std::function<void(void)> callbackTrackSet, std::function<void(void)> callbackTrackReset);
 
-    void callbackRailcomLocoAppeared(void);
+    void callbackRailcomLocoAppeared(void) override;
 
-    void callbackRailcomLocoLeft(void);
+    void callbackRailcomLocoLeft(void) override;
 
 private:
     ModulConfig &m_modulConfig;

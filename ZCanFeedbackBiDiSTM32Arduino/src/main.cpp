@@ -43,13 +43,22 @@ MemoryData memoryData;
 
 std::array<int, 8> trackPin1{PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7};
 
-FeedbackDecoder::Detection detectionMode{FeedbackDecoder::Detection::Railcom};
+FeedbackDecoder::Detection detectionMode1{FeedbackDecoder::Detection::Railcom};
 int configRailcomPin{PB0};
-int configIdPin{PB1};
+int configIdPin1{PB1};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
-FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, detectionMode,
-                                 configRailcomPin, configIdPin, true, true, xprintf);
+FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, detectionMode1,
+                                 configRailcomPin, configIdPin1, true, true, true, xprintf);
+
+// std::array<int, 8> trackPin2{PA15, PB3, PB4, PB5, PB6, PB7, PB8, PB9};
+
+// FeedbackDecoder::Detection detectionMode2{FeedbackDecoder::Detection::Digital};
+// int configIdPin2{PB10};
+
+// // I will need in the end two of those moduls to handle each of the 8 inputs
+// FeedbackDecoder feedbackDecoder2(memoryData.modulConfig2, Flash::writeData, trackPin2, detectionMode2,
+//                                  configRailcomPin, configIdPin2, true, true, xprintf);
 
 int ledPin{PC13};
 uint32_t lastLedBlinkINms{0};
@@ -84,14 +93,20 @@ void setup()
 
   if (!feedbackDecoder1.setCanObserver(canInterface))
   {
-    xprintf("ERROR: No can interface defined\n");
+    xprintf("ERROR: No can interface for decoder 1 defined\n");
   }
+
+  // if (!feedbackDecoder2.setCanObserver(canInterface))
+  // {
+  //   xprintf("ERROR: No can interface for decoder 2 defined\n");
+  // }
 
   Flash::m_memoryDataPtr = (uint16_t *)&memoryData;
   Flash::m_memoryDataSize = sizeof(MemoryData);
   Flash::readData();
 
   feedbackDecoder1.begin();
+  // feedbackDecoder2.begin();
 
   dcc.pin(PA8, 0);
   dcc.init(MAN_ID_DIY, 10, 0, 0);
@@ -104,6 +119,7 @@ void loop()
   dcc.process();
   canInterface->cyclic();
   feedbackDecoder1.cyclic();
+  // feedbackDecoder2.cyclic();
   uint32_t currentTimeINms = millis();
   if ((currentTimeINms - lastLedBlinkINms) > ledBlinkIntervalINms)
   {

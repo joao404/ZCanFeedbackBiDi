@@ -255,9 +255,9 @@ void FeedbackDecoder::cyclic()
                 }
             };
             portStatusCheck(state, trackSetFkt, trackResetFkt);
+            m_currentSenseMeasurement = 0;
+            m_detectionPort++;
         }
-        m_currentSenseMeasurement = 0;
-        m_detectionPort++;
         if (m_trackData.size() <= m_detectionPort)
         {
             m_detectionPort = 0;
@@ -383,7 +383,7 @@ void FeedbackDecoder::portStatusCheck(bool state, std::function<void(void)> call
 
 void FeedbackDecoder::callbackRailcomLocoAppeared(void)
 {
-    notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_detectionPort].railcomAddr);
+    notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
 }
 
 void FeedbackDecoder::callbackRailcomLocoLeft(void)
