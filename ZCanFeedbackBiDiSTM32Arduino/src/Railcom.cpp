@@ -46,6 +46,7 @@ void Railcom::cyclic()
                     m_printFunc("Loco left:0x%X\n", data.address);
                 }
                 data.address = 0;
+                data.direction = 0;
                 // TODO: save portnumber with trackData to use more for functions
                 // notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_detectionPort].railcomAddr);
                 callbackRailcomLocoLeft();
@@ -157,10 +158,11 @@ uint8_t Railcom::handleBitStream(bool *bitStreamIN1samplePer1us, size_t length, 
     size_t endIndex{0};
     size_t dataBeginIndex{0};
     uint8_t numberOfBytes{0};
-
-    for (auto dataIterator = railcomData.begin(); dataIterator != railcomData.end(); dataIterator++)
+    railcomDirection.fill(0);
+    auto directionIterator = railcomDirection.begin();
+    for (auto &data : railcomData)
     {
-        *dataIterator = 0xFF;
+        data = 0xFF;
         if (Railcom::getStartAndStopByteOfUart(bitStreamIN1samplePer1us, dataBeginIndex, length - 1, &startIndex, &endIndex))
         {
             // found
@@ -197,13 +199,15 @@ uint8_t Railcom::handleBitStream(bool *bitStreamIN1samplePer1us, size_t length, 
                     // not used => error
                     break;
                 default:
-                    *dataIterator = dataByte;
+                    data = dataByte;
+                    *directionIterator = directionCount;
                     numberOfBytes++;
                     break;
                 }
             }
             dataBeginIndex = endIndex;
         }
+        directionIterator++;
     }
     return numberOfBytes;
 }
@@ -240,7 +244,7 @@ void Railcom::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction)
                     data.direction = direction;
                     data.lastChangeTimeINms = millis();
                     if (m_debug)
-                        m_printFunc("Loco appeared:0x%X\n", locoAddr);
+                        m_printFunc("Loco appeared:0x%X D:0x%X\n", locoAddr, direction);
                     callbackRailcomLocoAppeared();
                     break;
                 }
