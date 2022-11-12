@@ -16,7 +16,7 @@
 
 #include "ZCan/ZCanInterface.h"
 
-ZCanInterface::ZCanInterface(bool debug, void (*printFunc)(const char *, ...))
+ZCanInterface::ZCanInterface(void (*printFunc)(const char *, ...), bool debug)
     : m_debug(debug)
 {
     if (nullptr != printFunc)

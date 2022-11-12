@@ -49,7 +49,8 @@ public:
     };
 
     FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
-                    int configAnalogOffsetPin, int configIdPin, bool debug, bool zcanDebug, bool railcomDebug, void (*printFunc)(const char *, ...) = nullptr);
+                    int configAnalogOffsetPin, int configIdPin, void (*printFunc)(const char *, ...) = nullptr,
+                    bool debug = false, bool zcanDebug = false, bool railcomDebug = false);
     virtual ~FeedbackDecoder();
 
     void begin();

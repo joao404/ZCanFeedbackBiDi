@@ -35,7 +35,7 @@ public:
         uint16_t lastChannelData;
     } RailcomData;
 
-    Railcom(bool debug, void (*printFunc)(const char *, ...) = nullptr);
+    Railcom(void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
     virtual ~Railcom();
 
 protected:

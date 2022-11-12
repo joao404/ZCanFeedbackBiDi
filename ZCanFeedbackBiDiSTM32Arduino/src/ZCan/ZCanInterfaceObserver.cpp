@@ -16,8 +16,8 @@
 
 #include "ZCan/ZCanInterfaceObserver.h"
 
-ZCanInterfaceObserver::ZCanInterfaceObserver(bool debug, void (*printFunc)(const char *, ...))
-    : ZCanInterface(debug, printFunc)
+ZCanInterfaceObserver::ZCanInterfaceObserver(void (*printFunc)(const char *, ...), bool debug)
+    : ZCanInterface(printFunc, debug)
 {
 }
 

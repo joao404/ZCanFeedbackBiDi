@@ -16,7 +16,7 @@
 
 #include "Railcom.h"
 
-Railcom::Railcom(bool debug, void (*printFunc)(const char *, ...))
+Railcom::Railcom(void (*printFunc)(const char *, ...), bool debug)
     : m_debug(debug),
       m_printFunc(printFunc)
 {

@@ -49,7 +49,7 @@ int configIdPin1{PB1};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
 FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, detectionMode1,
-                                 configRailcomPin, configIdPin1, true, true, true, xprintf);
+                                 configRailcomPin, configIdPin1, xprintf, true, true, true);
 
 std::array<int, 8> trackPin2{PA15, PB3, PB4, PB5, PB6, PB7, PB8, PB9};
 
@@ -58,7 +58,7 @@ int configIdPin2{PB10};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
 FeedbackDecoder feedbackDecoder2(memoryData.modulConfig2, Flash::writeData, trackPin2, detectionMode2,
-                                 configRailcomPin, configIdPin2, true, true, false, xprintf);
+                                 configRailcomPin, configIdPin2, xprintf, true, true, false);
 
 int ledPin{PC13};
 uint32_t lastLedBlinkINms{0};

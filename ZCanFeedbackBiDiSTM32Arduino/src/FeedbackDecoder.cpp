@@ -41,9 +41,9 @@
 #include "Arduino.h"
 
 FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
-                                 int configAnalogOffsetPin, int configIdPin, bool debug, bool zcanDebug, bool railcomDebug, void (*printFunc)(const char *, ...))
-    : ZCanInterfaceObserver(zcanDebug, printFunc),
-      Railcom(railcomDebug, printFunc),
+                                 int configAnalogOffsetPin, int configIdPin, void (*printFunc)(const char *, ...), bool debug, bool zcanDebug, bool railcomDebug)
+    : ZCanInterfaceObserver(printFunc, zcanDebug),
+      Railcom(printFunc, railcomDebug),
       m_debug(debug),
       m_saveDataFkt(saveDataFkt),
       m_detectionConfig(detectionConfig),

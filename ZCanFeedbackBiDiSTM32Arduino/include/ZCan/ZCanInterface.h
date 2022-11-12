@@ -152,7 +152,7 @@ public:
     const uint16_t roco10808Type{0x9201};
 
 protected:
-    ZCanInterface(bool debug, void (*printFunc)(const char *, ...) = nullptr);
+    ZCanInterface(void (*printFunc)(const char *, ...) = nullptr, bool debug =false);
 
     virtual ~ZCanInterface();
 
