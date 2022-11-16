@@ -127,7 +127,7 @@ void z21Interface::receive(uint8_t client, uint8_t *packet)
 #ifdef directResponse
 				data[0] = static_cast<uint8_t>(z21Interface::XHeader::LAN_X_BC_TRACK_POWER);
 				data[1] = 0x00;
-				EthSend(client, 0x07, z21Interface::Header::LAN_X_HEADER, data, true, Z21bcNone);
+				EthSend(client, 0x07, z21Interface::Header::LAN_X_HEADER, data, true, static_cast<uint16_t>(BcFlagShort::Z21bcNone));
 #endif
 				notifyz21InterfaceRailPower(EnergyState::csTrackVoltageOff);
 				break;

@@ -22,7 +22,7 @@
 #define ZDebug Serial // Port for the Debugging
 // #define DEBUG_SENDING
 
-// #define directResponse
+#define directResponse
 //--------------------------------------------------------------
 #define z21InterfaceclientMAX 30	// Speichergroesse for IP-Adressen
 #define z21InterfaceActTimeIP 20	// Aktivhaltung einer IP for (sec./2)

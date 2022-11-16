@@ -36,33 +36,36 @@ private:
 
     uint16_t m_serialNumber;
 
-    Preferences m_preferences;
-
     bool m_debug;
+
+    uint32_t m_lastPingSendTimeINms{0};
 
     uint16_t getSerialNumber() override;
 
     // onCallback
     void onIdenticalNetworkId() override;
 
-    
     bool onRequestPing(uint16_t id) override;
 
     bool onPing(uint16_t nid, uint32_t masterUid, uint16_t type, uint16_t sessionId) override;
 
+    bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value) override;
+
+    bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value) override;
+
     // Z21
-    void notifyz21InterfacegetSystemInfo(uint8_t client) override;
+    // void notifyz21InterfacegetSystemInfo(uint8_t client) override;
 
     void notifyz21InterfaceCANdetector(uint8_t client, uint8_t typ, uint16_t ID) override;
 
-    void notifyz21InterfaceRailPower(EnergyState State) override;
+    // void notifyz21InterfaceRailPower(EnergyState State) override;
 
-    void notifyz21InterfaceAccessoryInfo(uint16_t Adr, uint8_t &position) override;
-    void notifyz21InterfaceAccessory(uint16_t Adr, bool state, bool active) override;
+    // void notifyz21InterfaceAccessoryInfo(uint16_t Adr, uint8_t &position) override;
+    // void notifyz21InterfaceAccessory(uint16_t Adr, bool state, bool active) override;
 
-    // void notifyz21InterfaceExtAccessory(uint16_t Adr, byte state) override;
+    // // void notifyz21InterfaceExtAccessory(uint16_t Adr, byte state) override;
 
-    void notifyz21InterfaceLocoState(uint16_t Adr, uint8_t data[]) override;
-    void notifyz21InterfaceLocoFkt(uint16_t Adr, uint8_t type, uint8_t fkt) override;
-    void notifyz21InterfaceLocoSpeed(uint16_t Adr, uint8_t speed, uint8_t stepConfig) override;
+    // void notifyz21InterfaceLocoState(uint16_t Adr, uint8_t data[]) override;
+    // void notifyz21InterfaceLocoFkt(uint16_t Adr, uint8_t type, uint8_t fkt) override;
+    // void notifyz21InterfaceLocoSpeed(uint16_t Adr, uint8_t speed, uint8_t stepConfig) override;
 };
