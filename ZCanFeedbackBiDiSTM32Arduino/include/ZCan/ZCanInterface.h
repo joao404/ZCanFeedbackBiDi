@@ -152,7 +152,7 @@ public:
     const uint16_t roco10808Type{0x9201};
 
 protected:
-    ZCanInterface(void (*printFunc)(const char *, ...) = nullptr, bool debug =false);
+    ZCanInterface(void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
 
     virtual ~ZCanInterface();
 
@@ -194,7 +194,11 @@ protected:
 
     virtual bool onAccessorySetData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value);
 
+    virtual bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value);
+
     virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type);
+
+    virtual bool onAccessorySetPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value);
 
     virtual bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value);
 
@@ -227,6 +231,7 @@ protected:
     bool sendAccessoryPort4Evt(uint16_t accessoryId, uint8_t port, uint8_t value);
     bool sendAccessoryPort4Ack(uint16_t accessoryId, uint8_t port, bool valid, uint8_t value);
 
+    bool requestAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type);
     bool sendAccessoryDataEvt(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2);
     bool sendAccessoryDataAck(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2);
 
@@ -257,6 +262,7 @@ private:
     void messageAccessoryPort4Evt(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t value);
     void messageAccessoryPort4Ack(ZCanMessage &message, uint16_t accessoryId, uint8_t port, bool valid, uint8_t value);
 
+    void messageRequestAccessoryData(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type);
     void messageAccessoryDataEvt(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2);
     void messageAccessoryDataAck(ZCanMessage &message, uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value1, uint16_t value2);
 

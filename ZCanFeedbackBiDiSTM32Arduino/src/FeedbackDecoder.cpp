@@ -414,13 +414,13 @@ bool FeedbackDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_
             {
                 if (m_debug)
                     ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
-                result = sendAccessoryDataAck(m_modulId, port, type, m_railcomData[port].railcomAddr[0].address, m_railcomData[port].railcomAddr[1].address);
+                result = sendAccessoryDataAck(m_modulId, port, type, (m_railcomData[port].railcomAddr[0].direction << 14) | m_railcomData[port].railcomAddr[0].address, (m_railcomData[port].railcomAddr[1].direction << 14) | m_railcomData[port].railcomAddr[1].address);
             }
             else if (0x12 == type)
             {
                 if (m_debug)
                     ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
-                result = sendAccessoryDataAck(m_modulId, port, type, m_railcomData[port].railcomAddr[2].address, m_railcomData[port].railcomAddr[3].address);
+                result = sendAccessoryDataAck(m_modulId, port, type, (m_railcomData[port].railcomAddr[2].direction << 14) | m_railcomData[port].railcomAddr[2].address, (m_railcomData[port].railcomAddr[3].direction << 14) | m_railcomData[port].railcomAddr[3].address);
             }
         }
     }
