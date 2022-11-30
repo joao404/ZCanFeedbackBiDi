@@ -748,7 +748,7 @@ void ZCanInterface::messageRequestAccessoryData(ZCanMessage &message, uint16_t a
     message.clear();
     message.group = static_cast<uint8_t>(Group::Accessory);
     message.command = static_cast<uint8_t>(AccessoryCmd::Data);
-    message.mode = static_cast<uint8_t>(Mode::Cmd);
+    message.mode = static_cast<uint8_t>(Mode::Req);
     message.networkId = m_networkId;
     message.length = 0x04;
     message.data[0] = 0xFF & accessoryId;
