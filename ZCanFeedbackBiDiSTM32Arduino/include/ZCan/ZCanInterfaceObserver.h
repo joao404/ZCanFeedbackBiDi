@@ -23,7 +23,7 @@
 
 //#define CAN_DEBUG
 
-class ZCanInterfaceObserver : public ZCanInterface, public Observer
+class ZCanInterfaceObserver : public ZCanInterface, public Observer<Can::Message>
 {
 public:
     /**
@@ -70,7 +70,7 @@ public:
      */
     bool receiveMessage(ZCanMessage &message) override;
 
-    virtual void update(Observable &observable, void *data) override;
+    virtual void update(Observable<Can::Message> &observable, Can::Message *data) override;
 
 private:
     std::shared_ptr<CanInterface> m_canInterface;

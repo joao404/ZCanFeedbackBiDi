@@ -58,7 +58,7 @@ void CanInterfaceStm32::cyclic()
 {
     if (!m_usingInterrupt)
     {
-        CanMessage frame{};
+        Can::Message frame{};
         if (receive(frame, 0))
         {
             notify(&frame);
@@ -67,7 +67,7 @@ void CanInterfaceStm32::cyclic()
     errorHandling();
 }
 
-bool CanInterfaceStm32::transmit(CanMessage &frame, uint16_t timeoutINms)
+bool CanInterfaceStm32::transmit(Can::Message &frame, uint16_t timeoutINms)
 {
     bool result{false};
     if (!m_canHandle.transmit(frame.identifier, &frame.data[0], frame.data_length_code))
@@ -79,7 +79,7 @@ bool CanInterfaceStm32::transmit(CanMessage &frame, uint16_t timeoutINms)
     return result;
 }
 
-bool CanInterfaceStm32::receive(CanMessage &frame, uint16_t timeoutINms)
+bool CanInterfaceStm32::receive(Can::Message &frame, uint16_t timeoutINms)
 {
     bool result{false};
     int id{0};
@@ -108,7 +108,7 @@ void CanInterfaceStm32::errorHandling()
 
 void CanInterfaceStm32::interruptHandler()
 {
-    CanMessage frame{};
+    Can::Message frame{};
     if (CanInterfaceStm32::m_instance->receive(frame, 0))
     {
         CanInterfaceStm32::m_instance->notify(&frame);

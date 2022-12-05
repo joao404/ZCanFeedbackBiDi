@@ -44,8 +44,8 @@ MemoryData memoryData;
 std::array<int, 8> trackPin1{PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7};
 
 FeedbackDecoder::Detection detectionMode1{FeedbackDecoder::Detection::Railcom};
-int configRailcomPin{PB0};
-int configIdPin1{PB1};
+int configRailcomPin{PB12};
+int configIdPin1{PB13};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
 FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, detectionMode1,
@@ -54,7 +54,7 @@ FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trac
 std::array<int, 8> trackPin2{PA15, PB3, PB4, PB5, PB6, PB7, PB8, PB9};
 
 FeedbackDecoder::Detection detectionMode2{FeedbackDecoder::Detection::Digital};
-int configIdPin2{PB10};
+int configIdPin2{PB14};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
 FeedbackDecoder feedbackDecoder2(memoryData.modulConfig2, Flash::writeData, trackPin2, detectionMode2,

@@ -43,13 +43,13 @@ void ZCanInterfaceObserver::end()
 {
 }
 
-void ZCanInterfaceObserver::update(Observable &observable, void *data)
+void ZCanInterfaceObserver::update(Observable<Can::Message> &observable, Can::Message *data)
 {
   if (&observable == m_canInterface.get())
   {
     if (nullptr != data)
     {
-      CanInterface::CanMessage *frame = static_cast<CanInterface::CanMessage *>(data);
+      Can::Message *frame = data;
 
       ZCanMessage message;
       message.clear();
@@ -76,7 +76,7 @@ void ZCanInterfaceObserver::update(Observable &observable, void *data)
 
 bool ZCanInterfaceObserver::sendMessage(ZCanMessage &message)
 {
-  CanInterface::CanMessage txFrame;
+  Can::Message txFrame;
 
   // message.hash = m_hash;
 
@@ -105,7 +105,7 @@ bool ZCanInterfaceObserver::sendMessage(ZCanMessage &message)
 
 bool ZCanInterfaceObserver::receiveMessage(ZCanMessage &message)
 {
-  CanInterface::CanMessage rxFrame;
+  Can::Message rxFrame;
 
   bool result{false};
 

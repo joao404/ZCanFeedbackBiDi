@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <memory>
 #include "ZCan/CanInterface.h"
 #include "Stm32f1/Stm32Can.h"
 
@@ -32,9 +33,9 @@ public:
 
     void cyclic();
 
-    bool transmit(CanMessage &frame, uint16_t timeoutINms) override;
+    bool transmit(Can::Message &frame, uint16_t timeoutINms) override;
 
-    bool receive(CanMessage &frame, uint16_t timeoutINms) override;
+    bool receive(Can::Message &frame, uint16_t timeoutINms) override;
 
     static void interruptHandler();
 
