@@ -85,7 +85,7 @@ void FeedbackDecoder::begin()
         m_modulConfig.modulAdress = 0x00;
         // for (auto finding = m_modulConfig.trackConfig.begin(); finding != m_modulConfig.trackConfig.end(); ++finding)
         m_modulConfig.trackConfig.trackSetCurrentINmA = 10;
-        m_modulConfig.trackConfig.trackFreeToSetTimeINms = 10;
+        m_modulConfig.trackConfig.trackFreeToSetTimeINms = 20;
         m_modulConfig.trackConfig.trackSetToFreeTimeINms = 1000;
         m_modulConfig.sendChannel2Data = 0;
         m_saveDataFkt();
@@ -101,7 +101,7 @@ void FeedbackDecoder::begin()
     // 3300mV per 4096 bits is 0.8mVperCount
     // I have a 22 Ohm resistor so 0.8mV per Count * 22 * current is offset down below
     // so I take 8*22 = 17,6 is round about 18
-    m_trackSetVoltage = 18 * m_modulConfig.trackConfig.trackSetCurrentINmA;
+    m_trackSetVoltage = 10 * m_modulConfig.trackConfig.trackSetCurrentINmA;
     ZCanInterfaceObserver::m_printFunc("SW Version: 0x%08X, build date: 0x%08X\n", m_firmwareVersion, m_buildDate);
     ZCanInterfaceObserver::m_printFunc("NetworkId %x MA %x CH2 %x\n", m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
     ZCanInterfaceObserver::m_printFunc("trackSetCurrentINmA: %d\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
@@ -125,6 +125,7 @@ void FeedbackDecoder::begin()
         //  this is done outside of FeedbackDecoder
         if (!digitalRead(m_configAnalogOffsetPin))
         {
+            ZCanInterfaceObserver::m_printFunc("Offset measuring\n");
             configSingleMeasurementMode();
             // read current values of adcs as default value
             for (uint8_t port = 0; port < m_trackData.size(); ++port)
@@ -137,7 +138,7 @@ void FeedbackDecoder::begin()
                 // Read The ADC Conversion Result & Map It To PWM DutyCycle
                 m_trackData[port].voltageOffset = HAL_ADC_GetValue(&hadc1);
                 m_modulConfig.voltageOffset[port] = m_trackData[port].voltageOffset;
-                ZCanInterfaceObserver::m_printFunc("Offset port %d: %d\n", port, m_modulConfig.voltageOffset[port]);
+                ZCanInterfaceObserver::m_printFunc("Offset measurement port %d: %d\n", port, m_modulConfig.voltageOffset[port]);
             }
             m_saveDataFkt();
         }
@@ -165,7 +166,7 @@ void FeedbackDecoder::begin()
 
     for (uint8_t port = 0; port < m_trackData.size(); ++port)
     {
-        ZCanInterfaceObserver::m_printFunc("Offset port %d: %d\n", port, m_trackData[port].voltageOffset);
+        ZCanInterfaceObserver::m_printFunc("Offset from memory port %d: %d\n", port, m_trackData[port].voltageOffset);
     }
 
     // Wait random time before starting logging to Z21

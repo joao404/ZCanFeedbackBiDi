@@ -22,7 +22,7 @@ Railcom::Railcom(void (*printFunc)(const char *, ...), bool debug)
 {
     for (auto &data : m_railcomData)
     {
-        data.railcomAddr.fill({});
+        data.railcomAddr.fill({0, 0, 0, false});
         data.lastChannelId = 0;
         data.lastChannelData = 0;
     }
@@ -52,6 +52,7 @@ void Railcom::cyclic()
                 callbackRailcomLocoLeft();
             }
         }
+        checkRailcomDataChange(data);
     }
 }
 
@@ -221,15 +222,16 @@ void Railcom::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction)
         {
             if (locoAddr == data.address)
             {
-                data.lastChangeTimeINms = millis();
                 addressFound = true;
                 if (direction != data.direction)
                 {
                     data.direction = direction;
                     if (m_debug)
                         m_printFunc("Loco dir changed:0x%X 0x%X\n", locoAddr, direction);
-                    callbackRailcomLocoAppeared();
+                    data.changeReported = false;
+                    checkRailcomDataChange(data);
                 }
+                data.lastChangeTimeINms = millis();
                 break;
             }
         }
@@ -242,13 +244,28 @@ void Railcom::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction)
                 {
                     data.address = locoAddr;
                     data.direction = direction;
-                    data.lastChangeTimeINms = millis();
                     if (m_debug)
                         m_printFunc("Loco appeared:0x%X D:0x%X\n", locoAddr, direction);
-                    callbackRailcomLocoAppeared();
+                    data.changeReported = false;
+                    checkRailcomDataChange(data);
+                    data.lastChangeTimeINms = millis();
                     break;
                 }
             }
+        }
+    }
+}
+
+void Railcom::checkRailcomDataChange(RailcomAddr &data)
+{
+    uint32_t currentTimeINms = millis();
+    if (!data.changeReported)
+    {
+
+        if ((data.lastChangeTimeINms + m_railcomDataChangeCycleINms) < currentTimeINms)
+        {
+            data.changeReported = true;
+            callbackRailcomLocoAppeared();
         }
     }
 }

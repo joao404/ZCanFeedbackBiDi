@@ -64,19 +64,26 @@ void CanInterfaceStm32::cyclic()
             notify(&frame);
         }
     }
+    if (0 != m_transmitQueue.size())
+    {
+        auto frame = m_transmitQueue.front();
+        if (m_canHandle.transmit(frame.identifier, &frame.data[0], frame.data_length_code))
+        {
+            m_transmitQueue.pop();
+        }
+    }
     errorHandling();
 }
 
 bool CanInterfaceStm32::transmit(Can::Message &frame, uint16_t timeoutINms)
 {
-    bool result{false};
     if (!m_canHandle.transmit(frame.identifier, &frame.data[0], frame.data_length_code))
     {
 
         // m_printFunc("Error TX\n");
-        result = true;
+        m_transmitQueue.emplace(frame);
     }
-    return result;
+    return true;
 }
 
 bool CanInterfaceStm32::receive(Can::Message &frame, uint16_t timeoutINms)

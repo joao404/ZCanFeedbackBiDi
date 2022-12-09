@@ -26,6 +26,7 @@ public:
         uint16_t address;
         uint16_t direction;
         uint32_t lastChangeTimeINms;
+        bool changeReported;
     } RailcomAddr;
 
     typedef struct
@@ -53,6 +54,8 @@ protected:
 
     virtual void callbackRailcomLocoLeft(void) = 0;
 
+    void checkRailcomDataChange(RailcomAddr& data);
+
     bool m_debug;
 
     void (*m_printFunc)(const char *, ...);
@@ -61,7 +64,9 @@ protected:
 
     uint16_t m_lastRailcomAddress{0};
 
-    uint32_t m_railcomDataTimeoutINms{1000};
+    uint32_t m_railcomDataTimeoutINms{2000};
+
+    uint32_t m_railcomDataChangeCycleINms{500};
 
     std::array<RailcomData, 8> m_railcomData;
 

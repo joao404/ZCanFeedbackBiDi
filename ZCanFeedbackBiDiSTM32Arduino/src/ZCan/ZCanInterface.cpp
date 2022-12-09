@@ -92,7 +92,7 @@ void ZCanInterface::handleReceivedMessage(ZCanMessage &message)
     {
         if (m_debug)
         {
-            m_printFunc("Unsupported message ");
+            m_printFunc("Unhandled message ");
             m_printFunc("%s\n", message.getString().c_str());
         }
     }

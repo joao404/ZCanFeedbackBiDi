@@ -17,6 +17,7 @@
 #pragma once
 
 #include <memory>
+#include <queue>
 #include "ZCan/CanInterface.h"
 #include "Stm32f1/Stm32Can.h"
 
@@ -45,6 +46,8 @@ private:
     Stm32Can m_canHandle {};
 
     bool m_usingInterrupt;
+
+    std::queue<Can::Message> m_transmitQueue;
 
     void errorHandling();
 

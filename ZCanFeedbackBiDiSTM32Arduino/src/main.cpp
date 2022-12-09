@@ -51,7 +51,7 @@ int configIdPin1{PB13};
 FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, detectionMode1,
                                  configRailcomPin, configIdPin1, xprintf, true, true, true);
 
-std::array<int, 8> trackPin2{PA15, PB3, PB4, PB5, PB6, PB7, PB8, PB9};
+std::array<int, 8> trackPin2{PB9, PB8, PB7, PB6, PB5, PB4, PB3, PA15};
 
 FeedbackDecoder::Detection detectionMode2{FeedbackDecoder::Detection::Digital};
 int configIdPin2{PB14};
@@ -80,6 +80,7 @@ void setup()
   xdev_out(uart_putc);
   MX_DMA_Init();
   MX_ADC1_Init();
+  delay(1000);
   Serial.printf("ZCAN Feedback Decoder system frequency: %lu\n", HAL_RCC_GetSysClockFreq());
   // Calibrate The ADC On Power-Up For Better Accuracy
   HAL_ADCEx_Calibration_Start(&hadc1);

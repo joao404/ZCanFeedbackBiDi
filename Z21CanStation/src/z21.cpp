@@ -79,6 +79,7 @@ bool z21::onPing(uint16_t nid, uint32_t masterUid, uint16_t type, uint16_t sessi
 
 bool z21::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type, uint32_t value)
 {
+  Serial.printf("onAccessoryData %x %x %x %x\n", accessoryId, port, type, value);
   uint8_t data[16];
   data[0] = accessoryId & 0xFF;
   data[1] = accessoryId >> 8;
@@ -96,6 +97,7 @@ bool z21::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type, uint
 
 bool z21::onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value)
 {
+  Serial.printf("onAccessoryPort6 %x %x %x %x\n", accessoryId, port, type, value);
   uint8_t data[16];
   data[0] = accessoryId & 0xFF;
   data[1] = accessoryId >> 8;
