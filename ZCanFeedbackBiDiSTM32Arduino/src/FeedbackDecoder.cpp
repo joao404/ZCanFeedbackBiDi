@@ -333,8 +333,6 @@ void FeedbackDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
 
 bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr)
 {
-    // ZCanInterfaceObserver::m_printFunc("0x%X 0x%X\n", (railcomAddr[0].direction << 14) | railcomAddr[0].address, (railcomAddr[1].direction << 14) | railcomAddr[1].address);
-    
     bool result = sendAccessoryDataEvt(m_modulId, port, 0x11,
                                        (railcomAddr[0].direction << 14) | railcomAddr[0].address, (railcomAddr[1].direction << 14) | railcomAddr[1].address);
     result &= sendAccessoryDataEvt(m_modulId, port, 0x12,

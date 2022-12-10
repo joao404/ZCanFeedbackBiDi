@@ -80,7 +80,6 @@ void setup()
   xdev_out(uart_putc);
   MX_DMA_Init();
   MX_ADC1_Init();
-  delay(1000);
   Serial.printf("ZCAN Feedback Decoder system frequency: %lu\n", HAL_RCC_GetSysClockFreq());
   // Calibrate The ADC On Power-Up For Better Accuracy
   HAL_ADCEx_Calibration_Start(&hadc1);
