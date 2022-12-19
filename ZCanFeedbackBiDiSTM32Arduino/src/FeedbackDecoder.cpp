@@ -156,7 +156,7 @@ void FeedbackDecoder::begin()
         for (uint8_t port = 0; port < m_trackData.size(); ++port)
         {
             pinMode(m_trackData[port].pin, INPUT_PULLUP);
-            m_trackData[port].state = digitalRead(m_trackData[port].pin);
+            m_trackData[port].state = !digitalRead(m_trackData[port].pin);
             notifyBlockOccupied(port, 0x01, m_trackData[port].state);
             m_trackData[port].lastChangeTimeINms = millis();
             if (m_debug)
@@ -201,7 +201,7 @@ void FeedbackDecoder::cyclic()
 
     if (Detection::Digital == m_detectionConfig)
     {
-        bool state = digitalRead(m_trackData[m_detectionPort].pin);
+        bool state = !digitalRead(m_trackData[m_detectionPort].pin);
         portStatusCheck(
             state, []() {}, []() {});
         m_detectionPort++;
