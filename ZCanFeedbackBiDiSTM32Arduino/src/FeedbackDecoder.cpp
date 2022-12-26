@@ -533,7 +533,7 @@ bool FeedbackDecoder::onRequestModulObjectConfig(uint16_t id, uint32_t tag)
     if (id == m_networkId)
     {
         if (m_debug)
-            ZCanInterfaceObserver::m_printFunc("onRequestModulObjectConfig\n");
+            ZCanInterfaceObserver::m_printFunc("onRequestModulObjectConfig %x %x\n", id, tag);
         uint16_t value{0};
         switch (tag)
         {

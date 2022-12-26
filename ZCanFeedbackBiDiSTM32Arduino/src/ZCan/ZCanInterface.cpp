@@ -921,7 +921,7 @@ void ZCanInterface::messageModuleObjectConfigAck(ZCanMessage &message, uint16_t 
 {
     message.clear();
     message.group = static_cast<uint8_t>(Group::Info);
-    message.command = static_cast<uint8_t>(InfoCmd::ModulInfo);
+    message.command = static_cast<uint8_t>(InfoCmd::ModulObjectConfig);
     message.mode = static_cast<uint8_t>(Mode::Ack);
     message.networkId = m_networkId;
     message.length = 0x08;
