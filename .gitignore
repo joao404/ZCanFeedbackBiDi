@@ -5,3 +5,4 @@
 .vscode/ipch
 ZCanFeedbackBiDiSTM32/Makefile
 ZCanFeedbackBiDiSTM32/.mxproject
+FeedbackSchematic/FeedbackSchematic-backups/*

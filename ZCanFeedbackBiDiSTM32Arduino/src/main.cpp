@@ -18,6 +18,7 @@
 #include "Arduino.h"
 #include "ZCan/CanInterfaceStm32.h"
 #include "FeedbackDecoder.h"
+#include "FunctionDecoder.h"
 #include "Helper/xprintf.h"
 #include "NmraDcc.h"
 #include "Stm32f1/Flash.h"
@@ -25,6 +26,8 @@
 #include <memory>
 #include "Stm32f1/adc.h"
 #include "Stm32f1/dma.h"
+
+#define FUNCTIONDECODER
 
 void uart_putc(uint8_t d)
 {
@@ -37,6 +40,7 @@ typedef struct
 {
   FeedbackDecoder::ModulConfig modulConfig1;
   FeedbackDecoder::ModulConfig modulConfig2;
+  FunctionDecoder<8>::Config functionDecoderConfig;
 } MemoryData;
 
 MemoryData memoryData;
@@ -53,12 +57,15 @@ FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trac
 
 std::array<int, 8> trackPin2{PB9, PB8, PB7, PB6, PB5, PB4, PB3, PA15};
 
-FeedbackDecoder::Detection detectionMode2{FeedbackDecoder::Detection::Digital};
 int configIdPin2{PB14};
-
+#ifdef FUNCTIONDECODER
+FunctionDecoder<8> functionDecoder(memoryData.functionDecoderConfig, Flash::writeData, trackPin2, xprintf, true);
+#else
+FeedbackDecoder::Detection detectionMode2{FeedbackDecoder::Detection::Digital};
 // I will need in the end two of those moduls to handle each of the 8 inputs
 FeedbackDecoder feedbackDecoder2(memoryData.modulConfig2, Flash::writeData, trackPin2, detectionMode2,
                                  configRailcomPin, configIdPin2, xprintf, true, false, false);
+#endif
 
 int ledPin{PC13};
 uint32_t lastLedBlinkINms{0};
@@ -96,18 +103,25 @@ void setup()
     xprintf("ERROR: No can interface for decoder 1 defined\n");
   }
 
+#ifdef FUNCTIONDECODER
+
+#else
   if (!feedbackDecoder2.setCanObserver(canInterface))
   {
     xprintf("ERROR: No can interface for decoder 2 defined\n");
   }
-
+#endif
   Flash::m_memoryDataPtr = (uint16_t *)&memoryData;
   Flash::m_memoryDataSize = sizeof(MemoryData);
   Flash::readData();
 
   feedbackDecoder1.begin();
+#ifdef FUNCTIONDECODER
+  functionDecoder.begin();
+#else
   feedbackDecoder2.begin();
 
+#endif
   dcc.pin(PA8, 0);
   dcc.init(MAN_ID_DIY, 10, 0, 0);
 
@@ -119,7 +133,11 @@ void loop()
   dcc.process();
   canInterface->cyclic();
   feedbackDecoder1.cyclic();
+#ifdef FUNCTIONDECODER
+  functionDecoder.cyclic();
+#else
   feedbackDecoder2.cyclic();
+#endif
   uint32_t currentTimeINms = millis();
   if ((currentTimeINms - lastLedBlinkINms) > ledBlinkIntervalINms)
   {
@@ -132,6 +150,12 @@ void notifyDccAccTurnoutOutput(uint16_t Addr, uint8_t Direction, uint8_t OutputP
 {
   // Serial.printf("notifyDccAccTurnoutOutput: %u\n", Addr);
   feedbackDecoder1.callbackAccAddrReceived(Addr);
+
+#ifdef FUNCTIONDECODER
+  functionDecoder.notifyDccAccTurnoutOutput(Addr, Direction);
+#else
+  feedbackDecoder2.callbackAccAddrReceived(Addr);
+#endif
 }
 
 void notifyDccFunc(uint16_t Addr, DCC_ADDR_TYPE AddrType, FN_GROUP FuncGrp, uint8_t FuncState)
@@ -144,6 +168,33 @@ void notifyDccSpeed(uint16_t Addr, DCC_ADDR_TYPE AddrType, uint8_t Speed, DCC_DI
 {
   // Serial.printf("notifyDccSpeed: %u\n", Addr);
   feedbackDecoder1.callbackLocoAddrReceived(Addr);
+}
+
+uint8_t notifyCVValid(uint16_t CV, uint8_t Writable)
+{
+#ifdef FUNCTIONDECODER
+  return functionDecoder.notifyCVValid(CV, Writable);
+#else
+  return 0;
+#endif
+}
+
+uint8_t notifyCVRead(uint16_t CV)
+{
+#ifdef FUNCTIONDECODER
+  return functionDecoder.notifyCVRead(CV);
+#else
+  return 0;
+#endif
+}
+
+uint8_t notifyCVWrite(uint16_t CV, uint8_t Value)
+{
+#ifdef FUNCTIONDECODER
+  return functionDecoder.notifyCVWrite(CV, Value);
+#else
+  return 0;
+#endif
 }
 
 extern "C" void SystemClock_Config(void)

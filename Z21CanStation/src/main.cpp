@@ -26,6 +26,8 @@
 #include "z21.h"
 #include "xprintf.h"
 
+#include <AsyncUDP.h>
+
 void uart_putc(uint8_t d)
 {
   Serial.print((char)d);
@@ -42,6 +44,8 @@ const int16_t z21Port{21105};
 std::shared_ptr<UdpInterfaceEsp32> udpInterface = std::make_shared<UdpInterfaceEsp32>(30, z21Port, false);
 
 z21 centralStation(hash, serialNumber, z21Interface::HwType::Z21_XL, swVersion, xprintf, true, false, false);
+
+AsyncUDP udp;
 
 /**********************************************************************************/
 void setup()
@@ -108,9 +112,28 @@ void setup()
   {
     Serial.println("ERROR: No udp interface defined");
   }
-  
+
   centralStation.begin();
 
+  if (udp.listen(34472))
+  {
+    udp.onPacket([](AsyncUDPPacket packet)
+                 {
+      Serial.print("=>");
+      Serial.print(packet.remoteIP());
+      for(int i=0;i<packet.length();i++)
+      {
+        Serial.print(" ");
+        Serial.print(packet.data()[i], HEX);
+      }
+      Serial.print("\n");
+      for (int i = 0; i < packet.length(); i++)
+      {
+        Serial.print(" ");
+        Serial.print((char)packet.data()[i]);
+      }
+      Serial.print("\n"); });
+  }
   Serial.println("OK"); // start - reset serial receive Buffer
 }
 
