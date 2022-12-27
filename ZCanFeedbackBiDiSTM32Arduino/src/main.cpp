@@ -54,7 +54,7 @@ int statusTriggerOutputPin{PB10};
 int statusResetPin{PB11};
 uint32_t bitTimingINus{5000};
 
-StatusLed<1> statusLed(statusClkPin, statusDataPin, statusTriggerOutputPin, statusResetPin, bitTimingINus, xprintf);
+StatusLed<2> statusLed(statusClkPin, statusDataPin, statusTriggerOutputPin, statusResetPin, bitTimingINus, xprintf);
 
 std::array<int, 8> trackPin1{PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7};
 
@@ -75,7 +75,7 @@ FunctionDecoder<8> functionDecoder(memoryData.functionDecoderConfig, Flash::writ
 FeedbackDecoder::Detection detectionMode2{FeedbackDecoder::Detection::Digital};
 // I will need in the end two of those moduls to handle each of the 8 inputs
 FeedbackDecoder feedbackDecoder2(memoryData.modulConfig2, Flash::writeData, trackPin2, detectionMode2,
-                                 configRailcomPin, configIdPin2, xprintf, true, false, false);
+                                 configRailcomPin, configIdPin2, statusLed.getStatusArray()[1], xprintf, true, false, false);
 #endif
 
 int ledPin{PC13};
