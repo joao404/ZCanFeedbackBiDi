@@ -46,7 +46,8 @@ public:
     } Config;
 
 public:
-    FunctionDecoder(Config &config, std::function<bool(void)> saveDataFkt, std::array<int, N> &functionPin, void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
+    FunctionDecoder(Config &config, std::function<bool(void)> saveDataFkt, std::array<int, N> &functionPin, int configIdPin,
+                    void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
     virtual ~FunctionDecoder();
 
     void begin(bool decoderReset = false);
@@ -73,6 +74,14 @@ protected:
 
     Config &m_config;
 
+    int m_configIdPin;
+
+    uint32_t m_idPrgStartTimeINms{0};
+
+    uint32_t m_idPrgIntervalINms{60000}; // 1 min
+
+    bool m_idPrgRunning{false};
+
     struct FunctionState
     {
         int inUse;
@@ -96,9 +105,13 @@ protected:
 };
 
 template <std::size_t N>
-FunctionDecoder<N>::FunctionDecoder(Config &config, std::function<bool(void)> saveDataFkt, std::array<int, N> &functionPin, void (*printFunc)(const char *, ...), bool debug)
-    : m_saveDataFkt(saveDataFkt),
+FunctionDecoder<N>::FunctionDecoder(Config &config, std::function<bool(void)> saveDataFkt, std::array<int, N> &functionPin,
+                                    int configIdPin, void (*printFunc)(const char *, ...), bool debug)
+    : m_debug(debug),
+      m_printFunc(printFunc),
+      m_saveDataFkt(saveDataFkt),
       m_config(config),
+      m_configIdPin(configIdPin),
       m_functionPin(functionPin)
 {
 }
@@ -111,6 +124,8 @@ FunctionDecoder<N>::~FunctionDecoder()
 template <std::size_t N>
 void FunctionDecoder<N>::begin(bool decoderReset)
 {
+    pinMode(m_configIdPin, INPUT_PULLUP);
+
     const int timDelay = 100;
     // initialize the digital pins as outputs
     for (auto &pin : m_functionPin)
@@ -212,6 +227,21 @@ void FunctionDecoder<N>::begin(bool decoderReset)
 template <std::size_t N>
 void FunctionDecoder<N>::cyclic()
 {
+    unsigned long currentTimeINms{millis()};
+    if (m_idPrgRunning)
+    {
+        if ((m_idPrgStartTimeINms + m_idPrgIntervalINms) < currentTimeINms)
+        {
+            m_idPrgRunning = false;
+        }
+    }
+    if (!digitalRead(m_configIdPin))
+    {
+        // button pressed
+        m_idPrgRunning = true;
+        m_idPrgStartTimeINms = currentTimeINms;
+    }
+
     for (int i = 0; i < m_functionState.size(); i++)
     {
         if (m_functionState[i].inUse == 1)
@@ -291,8 +321,18 @@ void FunctionDecoder<N>::cyclic()
 template <std::size_t N>
 void FunctionDecoder<N>::notifyDccAccTurnoutOutput(uint16_t Addr, uint8_t funcState)
 {
-    if (Addr >= m_config.address && Addr < m_config.address + m_functionPin.size())
-    { // Controls Accessory_Address+16
+    if (m_idPrgRunning)
+    {
+        m_config.address = Addr;
+        m_idPrgRunning = false;
+        m_saveDataFkt();
+        if (m_debug)
+        {
+            m_printFunc("Base address of turnouts changed to 0x%x\n", Addr);
+        }
+    }
+    else if (Addr >= m_config.address && Addr < m_config.address + m_functionPin.size())
+    {
 #ifdef DEBUG
         Serial.print("Addr = ");
         Serial.println(Addr);

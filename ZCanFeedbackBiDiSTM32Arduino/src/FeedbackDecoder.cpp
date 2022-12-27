@@ -41,7 +41,8 @@
 #include "Arduino.h"
 
 FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
-                                 int configAnalogOffsetPin, int configIdPin, void (*printFunc)(const char *, ...), bool debug, bool zcanDebug, bool railcomDebug)
+                                 int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),
+                                 bool debug, bool zcanDebug, bool railcomDebug)
     : ZCanInterfaceObserver(printFunc, zcanDebug),
       Railcom(printFunc, railcomDebug),
       m_debug(debug),
@@ -49,6 +50,7 @@ FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(v
       m_detectionConfig(detectionConfig),
       m_configAnalogOffsetPin(configAnalogOffsetPin),
       m_configIdPin(configIdPin),
+      m_statusLed(statusLed),
       m_modulConfig(modulConfig)
 {
     auto sizeTrackData = m_trackData.size();
@@ -343,6 +345,7 @@ bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4>
 bool FeedbackDecoder::notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied)
 {
     uint16_t value = occupied ? 0x1100 : 0x0100;
+    bitWrite(m_statusLed, port, occupied);
     return sendAccessoryPort6Evt(m_modulId, port, type, value);
 }
 

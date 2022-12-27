@@ -49,7 +49,7 @@ public:
     };
 
     FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
-                    int configAnalogOffsetPin, int configIdPin, void (*printFunc)(const char *, ...) = nullptr,
+                    int configAnalogOffsetPin, int configIdPin, uint8_t& statusLed, void (*printFunc)(const char *, ...) = nullptr,
                     bool debug = false, bool zcanDebug = false, bool railcomDebug = false);
     virtual ~FeedbackDecoder();
 
@@ -106,6 +106,8 @@ protected:
     bool m_idPrgRunning{false};
 
     uint32_t m_idPrgIntervalINms{60000}; // 1 min
+
+    uint8_t& m_statusLed;
 
     uint32_t m_lastCanCmdSendINms{0};
     // jitter used for sending cyclic ping
