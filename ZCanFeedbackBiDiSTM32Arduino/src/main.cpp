@@ -46,8 +46,6 @@ typedef struct
 
 MemoryData memoryData;
 
-// TODO put getting statusled here
-
 int statusClkPin{PB0};
 int statusDataPin{PB1};
 int statusTriggerOutputPin{PB10};
@@ -149,6 +147,7 @@ void loop()
 #else
   feedbackDecoder2.cyclic();
 #endif
+  statusLed.cyclic();
   uint32_t currentTimeINms = millis();
   if ((currentTimeINms - lastLedBlinkINms) > ledBlinkIntervalINms)
   {
