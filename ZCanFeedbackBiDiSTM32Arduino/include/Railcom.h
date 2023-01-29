@@ -36,6 +36,13 @@ public:
         uint16_t lastChannelData;
     } RailcomData;
 
+    enum class Channel : uint8_t
+    {
+        eUnknown,
+        eChannel1,
+        eChannel2
+    };
+
     Railcom(void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
     virtual ~Railcom();
 
@@ -48,7 +55,7 @@ protected:
 
     uint8_t handleBitStream(bool bitStreamIN1samplePer1us[], size_t length, std::array<uint8_t, 8> &railcomData, std::array<int8_t, 8> &railcomDirection, uint16_t voltageOffset);
 
-    void handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction);
+    void handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel channel, std::array<uint16_t, 4>& railcomData);
     
     virtual void callbackRailcomLocoAppeared(void) = 0;
 
@@ -64,9 +71,9 @@ protected:
 
     uint16_t m_lastRailcomAddress{0};
 
-    uint32_t m_railcomDataTimeoutINms{2000};
+    uint32_t m_railcomDataTimeoutINms{1000};
 
-    uint32_t m_railcomDataChangeCycleINms{500};
+    uint32_t m_railcomDataChangeCycleINms{100};
 
     std::array<RailcomData, 8> m_railcomData;
 
