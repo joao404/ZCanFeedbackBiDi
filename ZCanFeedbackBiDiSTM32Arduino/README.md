@@ -5,6 +5,10 @@ This project is based on the work of:
 - Philipp Gathow (https://pgahtow.de/w/R%C3%BCckmeldung 8xRailCom-Detektor)
 - Zimo Can Protocol
 
-Provides Z21 and Roco 10808 compatible Bidi/Railcom detector.
+Following functionality is supported:
+- Z21 and Roco 10808 compatible Bidi/Railcom detector
+- Shift register output to signal status of detector
+- optional function decoder which is able to be used as switch, blink, servo, pulse and fade
 
-Currently Railcom does not work because Esp32 Dev Kit C does not have even 8 analog inputs accessable via DMA
+WORK IN PROGRESS:
+- currently a synchronisation problem can occur, which results in ghost reports because second railcom byte is interpreted as first

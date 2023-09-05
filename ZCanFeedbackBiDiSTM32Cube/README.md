@@ -7,4 +7,4 @@ This project is based on the work of:
 
 Provides Z21 and Roco 10808 compatible Bidi/Railcom detector.
 
-Currently Railcom does not work because Esp32 Dev Kit C does not have even 8 analog inputs accessable via DMA
+Development currently stopped to future Arduino framework featured solution

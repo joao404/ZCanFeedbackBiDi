@@ -17,10 +17,21 @@
 #include "Arduino.h"
 #include <Servo.h>
 
+// DCC controlled function decoder
+// configuration done by CV write
+// possible modes:
+// - led
+// - blink
+// - servo
+// - pulse
+// - fade
+// see enum Type
+
 template <std::size_t N>
 class FunctionDecoder
 {
 public:
+    // possible modes for output pins
     enum class Type : uint8_t
     {
         Switch = 0,
@@ -31,6 +42,7 @@ public:
         Fade = 5
     };
 
+    // struct which defines configuration of one pin
     typedef struct
     {
         Type type;
@@ -39,6 +51,7 @@ public:
         uint8_t endPosition;
     } FunctionConfig;
 
+    // configuration for class
     typedef struct
     {
         uint16_t address;
@@ -46,40 +59,63 @@ public:
     } Config;
 
 public:
+    // constructor
+    // config: configuration of decoder
+    // saveDataFkt: callback to trigger save of new configuration
+    // functionPin: array of function pins
+    // configIdPin: input pin to trigger writing of address
+    // printFunc (optional): debug print
+    // debug (optional): enabling of debug output
     FunctionDecoder(Config &config, std::function<bool(void)> saveDataFkt, std::array<int, N> &functionPin, int configIdPin,
                     void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
+                    
+    // destructor
     virtual ~FunctionDecoder();
 
+    // must be called before first call of cyclic()
     void begin(bool decoderReset = false);
 
+    // has to be called cyclic
     void cyclic();
 
+    // notification of recieved DCC telegram with accessory turnout change
     void notifyDccAccTurnoutOutput(uint16_t Addr, uint8_t funcState);
 
+    // notification for a valid CV
     uint8_t notifyCVValid(uint16_t cv, uint8_t writable);
+
+    // notification for a CV read
     uint8_t notifyCVRead(uint16_t cv);
+
+    // notification for a CV write
     uint8_t notifyCVWrite(uint16_t cv, uint8_t value);
 
 protected:
+
+    // if true, debug output is active
     bool m_debug;
 
+    // debug output function
     void (*m_printFunc)(const char *, ...);
 
+    // callback for saving configuration permanently
     std::function<bool(void)> m_saveDataFkt;
 
+    // reset address
     const uint16_t m_resetCv{20u};
+    // CV address of first value
     const uint16_t m_baseCV{30u};
 
     const uint16_t m_functionConfigSize{4u};
-
+    // config of function decoder
     Config &m_config;
 
     int m_configIdPin;
-
+    // start time of address programming
     uint32_t m_idPrgStartTimeINms{0};
 
     uint32_t m_idPrgIntervalINms{60000}; // 1 min
-
+    // true if programming of id is currently running
     bool m_idPrgRunning{false};
 
     struct FunctionState
@@ -91,11 +127,11 @@ protected:
         int startValue;
         int firstCmdReceived;
     };
-
+    // current state of each pin/function
     std::array<FunctionState, N> m_functionState;
-
+    // output pins
     std::array<int, N> &m_functionPin;
-
+    // data structure for handling servo
     Servo servo[N];
 
     const int m_servoStartDelay{50};
