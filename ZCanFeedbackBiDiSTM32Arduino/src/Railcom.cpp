@@ -37,6 +37,7 @@ void Railcom::cyclic()
     // check for address data which was not renewed
     for (auto &data : m_railcomData[m_railcomDetectionPort].railcomAddr)
     {
+        // check if a address, that is currently present, was not refreshed since timeout
         if (0 != data.address)
         {
             if ((m_railcomDataTimeoutINms + data.lastChangeTimeINms) < millis())
@@ -52,19 +53,121 @@ void Railcom::cyclic()
                 callbackRailcomLocoLeft();
             }
         }
+
+        // check if any change of address needs to be reported
+        // used for delay reported of comming/going address
         checkRailcomDataChange(data);
     }
 }
 
+// analyze incoming bit stream for railcom data and act accordingly
 void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t length, uint16_t voltageOffset, uint16_t trackSetVoltage)
 {
+    std::array<RailcomByte, 8> railcomBytes;
+    m_channel1Direction = 0;
+    m_channel2Direction = 0;
+    m_dmaBufferIN1samplePer1us = dmaBufferIN1samplePer1us;
+    // get possible uart bytes of serial communication including start position in stream and polarity to check direction
+    uint8_t numberOfBytes = handleBitStream(dmaBufferIN1samplePer1us, length, railcomBytes, voltageOffset, trackSetVoltage);
+    // channel 1
+    // bool isChannel1DataValid{0x40 > railcomBytes[0].data};
+    // isChannel1DataValid &= (0x40 > railcomBytes[1].data);
+    bool isChannel1DataValid{railcomBytes[0].valid && railcomBytes[1].valid};
+    isChannel1DataValid &= ((railcomBytes[1].startIndex - railcomBytes[0].endIndex) < 10);// difference between first and second byte is not more than 10us
+    isChannel1DataValid &= (!railcomBytes[2].valid || ((railcomBytes[2].startIndex - railcomBytes[1].endIndex) > 10));// next byte is at least more than 10us if valid
+    if (isChannel1DataValid)
+    {
+        // check if start index of first byte is near second byte start index
+        uint8_t railcomId = (railcomBytes[0].data >> 2) & 0xF;
+        uint16_t railcomValue = ((railcomBytes[0].data & 0x03) << 6) | (railcomBytes[1].data & 0x3F);
+        uint16_t locoAddr{0};
+        if ((0x01 == m_railcomData[m_railcomDetectionPort].lastChannelId) && (0x02 == railcomId))
+        {
+            locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData & 0x3F) << 8) | railcomValue;
+        }
+
+        if ((4 == railcomBytes[0].direction) && (4 == railcomBytes[1].direction))
+        {
+            m_channel1Direction = 0x10;
+        }
+        else if ((-4 == railcomBytes[0].direction) && (-4 == railcomBytes[1].direction))
+        {
+            m_channel1Direction = 0x11;
+        }
+        std::array<uint16_t, 4> data = {m_railcomData[m_railcomDetectionPort].lastChannelId, m_railcomData[m_railcomDetectionPort].lastChannelData, railcomId, railcomValue};
+        handleFoundLocoAddr(locoAddr, m_channel1Direction, Channel::eChannel1, data);
+        m_railcomData[m_railcomDetectionPort].lastChannelId = railcomId;
+        m_railcomData[m_railcomDetectionPort].lastChannelData = railcomValue;
+    }
+    else
+    {
+        // channel 1 data is invalid, delete last version data
+        m_railcomData[m_railcomDetectionPort].lastChannelId = 0xFF;
+        m_railcomData[m_railcomDetectionPort].lastChannelData = 0xFF;
+
+        // check if data could be channel 2
+        // either bytes could have a to big distance or second one is not valid
+        // if second one is not valid, we can stop immendiately because there is no valid combination
+    }
+    // channel 2
+    // check startindex of bytes to one another
+    if (0xFF != railcomBytes[2].data && 0xFF != railcomBytes[3].data && 0xFF != railcomBytes[4].data && 0xFF != railcomBytes[5].data && 0xFF != railcomBytes[6].data && 0xFF != railcomBytes[7].data)
+    {
+        if (4 == railcomBytes[2].direction)
+        {
+            m_channel2Direction = 0x10;
+        }
+        if (-4 == railcomBytes[2].direction)
+        {
+            m_channel2Direction = 0x11;
+        }
+        std::array<uint16_t, 4> data = {1, 2, 3, 4};
+        handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
+    }
+}
+
+// retrive parameters of next byte in bit stream
+bool Railcom::getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex,
+                                        size_t *findStartIndex, size_t *findEndIndex)
+{
+    while (!(bitStreamIN1samplePer1us[startIndex] && !bitStreamIN1samplePer1us[startIndex + 1]) && ((startIndex) < endIndex))
+    {
+        // make sure to have first high level
+        startIndex++;
+    }
+    if ((startIndex + 1) >= endIndex)
+    {
+        return false;
+    }
+    *findStartIndex = startIndex;
+
+    // add six to land at first byte
+    //*findStartIndex += 6;
+    // end index is 40 ticks => 10 bits after start index
+    *findEndIndex = *findStartIndex + 39;
+
+    if (*findEndIndex > endIndex)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+uint8_t Railcom::handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length, std::array<RailcomByte, 8> &railcomBytes, uint16_t voltageOffset, uint16_t trackSetVoltage)
+{
+    // search for starting zero of first byte by ignoring first 15us
+    size_t startIndex{0};
+    size_t endIndex{0};
+    size_t dataBeginIndex{0};
+    uint8_t numberOfBytes{0};
+    auto bytesIterator = railcomBytes.begin();
 
     std::array<bool, 512> bitStreamDataBuffer;
-    if (length > bitStreamDataBuffer.size())
-    {
-        return;
-    }
+
     auto iteratorBit = bitStreamDataBuffer.begin();
+
+    size_t maxIterator{length > bitStreamDataBuffer.size() ? bitStreamDataBuffer.size() : length};
 
     for (size_t i = 0; i < length; i++)
     {
@@ -79,106 +182,23 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
         iteratorBit++;
     }
 
-    // TODO
-    // Analyze direction after getting array with position of uart
+    bool *bitStreamIN1samplePer1us{bitStreamDataBuffer.begin()};
 
-    std::array<uint8_t, 8> railcomData;
-    std::array<int8_t, 8> railcomDirection;
-    railcomData.fill(0xFF);
-    m_channel1Direction = 0;
-    m_channel2Direction = 0;
-    m_dmaBufferIN1samplePer1us = dmaBufferIN1samplePer1us;
-    uint8_t numberOfBytes = handleBitStream(bitStreamDataBuffer.begin(), 400, railcomData, railcomDirection, voltageOffset);
-    // channel 1
-    if (0x40 > railcomData[0] && 0x40 > railcomData[1])
+    for (auto &byte : railcomBytes)
     {
-        uint8_t railcomId = (railcomData[0] >> 2) & 0xF;
-        uint16_t railcomValue = ((railcomData[0] & 0x03) << 6) | (railcomData[1] & 0x3F);
-        uint16_t locoAddr{0};
-        if ((0x01 == m_railcomData[m_railcomDetectionPort].lastChannelId) && (0x02 == railcomId))
-        {
-            locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData & 0x3F) << 8) | railcomValue;
-        }
+        byte.data = 0xFF;
 
-        if ((4 == railcomDirection[0]) && (4 == railcomDirection[1]))
-        {
-            m_channel1Direction = 0x10;
-        }
-        else if ((-4 == railcomDirection[0]) && (-4 == railcomDirection[1]))
-        {
-            m_channel1Direction = 0x11;
-        }
-        std::array<uint16_t, 4> data = {m_railcomData[m_railcomDetectionPort].lastChannelId, m_railcomData[m_railcomDetectionPort].lastChannelData, railcomId, railcomValue};
-        handleFoundLocoAddr(locoAddr, m_channel1Direction, Channel::eChannel1, data);
-        m_railcomData[m_railcomDetectionPort].lastChannelId = railcomId;
-        m_railcomData[m_railcomDetectionPort].lastChannelData = railcomValue;
-    }
-    else
-    {
-        // channel 1 data is invalid, delete last version data
-        m_railcomData[m_railcomDetectionPort].lastChannelId = 0xFF;
-        m_railcomData[m_railcomDetectionPort].lastChannelData = 0xFF;
-    }
-    // channel 2
-    if (0xFF != railcomData[2] && 0xFF != railcomData[3] && 0xFF != railcomData[4] && 0xFF != railcomData[5] && 0xFF != railcomData[6] && 0xFF != railcomData[7])
-    {
-        if (4 == railcomDirection[2])
-        {
-            m_channel2Direction = 0x10;
-        }
-        if (-4 == railcomDirection[2])
-        {
-            m_channel2Direction = 0x11;
-        }
-        std::array<uint16_t, 4> data = {1, 2, 3, 4};
-        handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
-    }
-}
-
-bool Railcom::getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex, size_t *findStartIndex, size_t *findEndIndex)
-{
-    while (!(bitStreamIN1samplePer1us[startIndex] && !bitStreamIN1samplePer1us[startIndex + 1]) && ((startIndex) < endIndex))
-    {
-        // make sure to have first high level
-        startIndex++;
-    }
-    if ((startIndex + 1) >= endIndex)
-    {
-        return false;
-    }
-    *findStartIndex = startIndex;
-
-    *findStartIndex += 6;
-
-    *findEndIndex = *findStartIndex + 28;
-
-    if (*findEndIndex > endIndex)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-uint8_t Railcom::handleBitStream(bool *bitStreamIN1samplePer1us, size_t length, std::array<uint8_t, 8> &railcomData, std::array<int8_t, 8> &railcomDirection, uint16_t voltageOffset)
-{
-    // search for starting zero of first byte by ignoring first 15us
-    size_t startIndex{0};
-    size_t endIndex{0};
-    size_t dataBeginIndex{0};
-    uint8_t numberOfBytes{0};
-    railcomDirection.fill(0);
-    auto directionIterator = railcomDirection.begin();
-    for (auto &data : railcomData)
-    {
-        data = 0xFF;
         if (Railcom::getStartAndStopByteOfUart(bitStreamIN1samplePer1us, dataBeginIndex, length - 1, &startIndex, &endIndex))
         {
             // found
             uint8_t dataByte{0};
             uint8_t bit{0};
             int8_t directionCount{0};
-            while (endIndex >= startIndex)
+            byte.startIndex = startIndex;
+            byte.endIndex = endIndex;
+            startIndex += 6; // add 6 bits to get to middle of first data bit
+            size_t endOfByte{startIndex + 28};
+            while (endOfByte >= startIndex)
             {
                 if (!bitStreamIN1samplePer1us[startIndex])
                 {
@@ -209,15 +229,15 @@ uint8_t Railcom::handleBitStream(bool *bitStreamIN1samplePer1us, size_t length, 
                     // not used => error
                     break;
                 default:
-                    data = dataByte;
-                    *directionIterator = directionCount;
+                    byte.data = dataByte;
+                    byte.direction = directionCount;
+                    byte.valid = true;
                     numberOfBytes++;
                     break;
                 }
             }
             dataBeginIndex = endIndex;
         }
-        directionIterator++;
     }
     return numberOfBytes;
 }
@@ -274,6 +294,7 @@ void Railcom::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel
     }
 }
 
+// check if any data change needs to be reported
 void Railcom::checkRailcomDataChange(RailcomAddr &data)
 {
     uint32_t currentTimeINms = millis();

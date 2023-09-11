@@ -52,8 +52,10 @@ int statusTriggerOutputPin{PB10};
 int statusResetPin{PB11};
 uint32_t bitTimingINus{5000};
 
+// status led of feedback decoder
 StatusLed<2> statusLed(statusClkPin, statusDataPin, statusTriggerOutputPin, statusResetPin, bitTimingINus, xprintf);
 
+// pins for feedback decoder 1
 std::array<int, 8> trackPin1{PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7};
 
 FeedbackDecoder::Detection detectionMode1{FeedbackDecoder::Detection::Railcom};
@@ -62,7 +64,7 @@ int configIdPin1{PB13};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
 FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, detectionMode1,
-                                 configRailcomPin, configIdPin1, statusLed.getStatusArray()[0], xprintf, true, false, false);
+                                 configRailcomPin, configIdPin1, statusLed.getStatusArray()[0], xprintf, true, false, true);
 
 std::array<int, 8> trackPin2{PB9, PB8, PB7, PB6, PB5, PB4, PB3, PA15};
 

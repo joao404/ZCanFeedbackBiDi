@@ -43,6 +43,23 @@ public:
         eChannel2
     };
 
+    typedef struct tRailcomByte
+    {
+        uint8_t data;
+        int8_t direction;
+        size_t startIndex;
+        size_t endIndex;
+        bool valid;
+
+        tRailcomByte() : data(0xFF),
+                         direction(0),
+                         startIndex(1),
+                         endIndex(0),
+                         valid(false){
+
+                         };
+    } RailcomByte;
+
     Railcom(void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
     virtual ~Railcom();
 
@@ -53,21 +70,21 @@ protected:
 
     bool getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex, size_t *findStartIndex, size_t *findEndIndex);
 
-    uint8_t handleBitStream(bool bitStreamIN1samplePer1us[], size_t length, std::array<uint8_t, 8> &railcomData, std::array<int8_t, 8> &railcomDirection, uint16_t voltageOffset);
+    uint8_t handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length, std::array<RailcomByte, 8> &railcomBytes, uint16_t voltageOffset, uint16_t trackSetVoltage);
 
-    void handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel channel, std::array<uint16_t, 4>& railcomData);
-    
+    void handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel channel, std::array<uint16_t, 4> &railcomData);
+
     virtual void callbackRailcomLocoAppeared(void) = 0;
 
     virtual void callbackRailcomLocoLeft(void) = 0;
 
-    void checkRailcomDataChange(RailcomAddr& data);
+    void checkRailcomDataChange(RailcomAddr &data);
 
     bool m_debug;
 
     void (*m_printFunc)(const char *, ...);
 
-    uint16_t* m_dmaBufferIN1samplePer1us;
+    uint16_t *m_dmaBufferIN1samplePer1us;
 
     uint16_t m_lastRailcomAddress{0};
 
@@ -82,7 +99,7 @@ protected:
     uint8_t m_railcomDetectionMeasurement{0};
 
     const uint8_t m_maxNumberOfConsecutiveMeasurements{4};
-    
+
     uint16_t m_channel1Direction{0};
 
     uint16_t m_channel2Direction{0};
