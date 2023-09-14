@@ -60,6 +60,15 @@ public:
                          };
     } RailcomByte;
 
+    typedef struct tRailcomChannelData
+    {
+        size_t size;
+        std::array<RailcomByte, 8> bytes;
+        tRailcomChannelData() : size(0){
+
+                         };
+    } RailcomChannelData;
+
     Railcom(void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
     virtual ~Railcom();
 
@@ -70,7 +79,7 @@ protected:
 
     bool getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex, size_t *findStartIndex, size_t *findEndIndex);
 
-    uint8_t handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length, std::array<RailcomByte, 8> &railcomBytes, uint16_t voltageOffset, uint16_t trackSetVoltage);
+    void handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length, RailcomChannelData &channel1, RailcomChannelData &channel2, uint16_t voltageOffset, uint16_t trackSetVoltage);
 
     void handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel channel, std::array<uint16_t, 4> &railcomData);
 

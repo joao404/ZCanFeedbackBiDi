@@ -16,10 +16,14 @@
 
 #include "Arduino.h"
 
+// output class for status led
+// leds are connected to shift register ICs
+// N: number of 8bit registers
 template <std::size_t N>
 class StatusLed
 {
 public:
+    // constructor
     StatusLed(int clkPin, int dataPin, int triggerOutputPin, int resetPin, uint32_t bitTimingINus,
               void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
     virtual ~StatusLed();
