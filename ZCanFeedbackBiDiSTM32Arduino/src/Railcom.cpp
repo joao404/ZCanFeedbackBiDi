@@ -71,7 +71,7 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
     // get possible uart bytes of serial communication including start position in stream and polarity to check direction
     handleBitStream(dmaBufferIN1samplePer1us, length, channel1, channel2, voltageOffset, trackSetVoltage);
 
-    bool dataReceivedChannel1{false};
+    // bool dataReceivedChannel1{false};
 
     if (channel1.size >= 2)
     {
@@ -79,11 +79,11 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
         // run through analytics of every two bytes
         for (size_t i = 1; i < channel1.size; i++)
         {
-            if ((channel1.bytes[i].startIndex - channel1.bytes[i - 1].endIndex) < 10) // one byte commes direct after another
+            uint8_t highByte{channel1.bytes[i - 1].data};
+            uint8_t lowByte{channel1.bytes[i].data};
+            if ((highByte < 0x40) && (lowByte < 0x40))
             {
-                uint8_t highByte{channel1.bytes[i - 1].data};
-                uint8_t lowByte{channel1.bytes[i].data};
-                if ((highByte < 0x40) && (lowByte < 0x40))
+                if ((channel1.bytes[i].startIndex - channel1.bytes[i - 1].endIndex) < 6) // one byte commes direct after another
                 {
                     // check if start index of first byte is near second byte start index
                     uint8_t railcomId = (highByte >> 2) & 0xF;
@@ -92,6 +92,10 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
                     if ((0x01 == m_railcomData[m_railcomDetectionPort].lastChannelId) && (0x02 == railcomId))
                     {
                         locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData & 0x3F) << 8) | railcomValue;
+                    }
+                    else if ((0x02 == m_railcomData[m_railcomDetectionPort].lastChannelId) && (0x01 == railcomId))
+                    {
+                        locoAddr = ((railcomValue & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].lastChannelData;
                     }
 
                     if ((4 == channel1.bytes[i - 1].direction) && (4 == channel1.bytes[i].direction))
@@ -106,18 +110,18 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
                     handleFoundLocoAddr(locoAddr, m_channel1Direction, Channel::eChannel1, data);
                     m_railcomData[m_railcomDetectionPort].lastChannelId = railcomId;
                     m_railcomData[m_railcomDetectionPort].lastChannelData = railcomValue;
-                    dataReceivedChannel1 = true;
+                    // dataReceivedChannel1 = true;
                     break;
                 }
             }
         }
     }
 
-    if (!dataReceivedChannel1)
-    {
-        m_railcomData[m_railcomDetectionPort].lastChannelId = 0xFF;
-        m_railcomData[m_railcomDetectionPort].lastChannelData = 0xFF;
-    }
+    // if (!dataReceivedChannel1)
+    // {
+    //     m_railcomData[m_railcomDetectionPort].lastChannelId = 0xFF;
+    //     m_railcomData[m_railcomDetectionPort].lastChannelData = 0xFF;
+    // }
 
     // channel 2
     if (channel2.size >= 2)
@@ -126,7 +130,7 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
         // run through analytics of every two bytes
         for (size_t i = 1; i < channel2.size; i++)
         {
-            if ((channel2.bytes[i].startIndex - channel2.bytes[i - 1].endIndex) < 10) // one byte commes direct after another
+            if ((channel2.bytes[i].startIndex - channel2.bytes[i - 1].endIndex) < 6) // one byte commes direct after another
             {
                 uint8_t highByte{channel2.bytes[i - 1].data};
                 uint8_t lowByte{channel2.bytes[i].data};
@@ -151,28 +155,25 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
 bool Railcom::getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex,
                                         size_t *findStartIndex, size_t *findEndIndex)
 {
-    while (!(bitStreamIN1samplePer1us[startIndex] && !bitStreamIN1samplePer1us[startIndex + 1]) && ((startIndex) < endIndex))
+    bool result{false};
+    // search for first high level
+    while (startIndex < endIndex)
     {
-        // make sure to have first high level
+        if (bitStreamIN1samplePer1us[startIndex] && !bitStreamIN1samplePer1us[startIndex + 1])
+        {
+            // negativ flank found
+            *findStartIndex = startIndex;
+
+            *findEndIndex = *findStartIndex + 37;
+            if (*findEndIndex <= endIndex)
+            {
+                result = true;
+            }
+            break;
+        }
         startIndex++;
     }
-    if ((startIndex + 1) >= endIndex)
-    {
-        return false;
-    }
-    *findStartIndex = startIndex;
-
-    // add six to land at first byte
-    //*findStartIndex += 6;
-    // end index is 40 ticks => 10 bits after start index
-    *findEndIndex = *findStartIndex + 39;
-
-    if (*findEndIndex > endIndex)
-    {
-        return false;
-    }
-
-    return true;
+    return result;
 }
 
 void Railcom::handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length, RailcomChannelData &channel1, RailcomChannelData &channel2, uint16_t voltageOffset, uint16_t trackSetVoltage)
@@ -257,7 +258,7 @@ void Railcom::handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length
         channel.size = numberOfBytes;
     };
 
-    const size_t endOfChannel1{185}; // 193us after start does channel 2 start
+    const size_t endOfChannel1{165}; // 193us after start does channel 2 start
     size_t endOfSearch{(length - 1) > endOfChannel1 ? endOfChannel1 : length - 1};
     analyzeStream(channel1, 0, endOfSearch);
 
@@ -300,7 +301,7 @@ void Railcom::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel
                     data.direction = direction;
                     if (m_debug)
                     {
-                        m_printFunc("Loco appeared:0x%X D:0x%X at %d\n", locoAddr, direction, channel);
+                        m_printFunc("Loco appeared:0x%X D:0x%X at %d:%d\n", locoAddr, direction, m_railcomDetectionPort, channel);
                         m_printFunc("%x %x %x %x\n", railcomData[0], railcomData[1], railcomData[2], railcomData[3]);
                     }
                     data.changeReported = false;
