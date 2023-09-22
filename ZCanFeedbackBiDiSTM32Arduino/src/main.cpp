@@ -82,6 +82,9 @@ int ledPin{PC13};
 uint32_t lastLedBlinkINms{0};
 uint32_t ledBlinkIntervalINms{1000};
 
+
+int debugPin{PB15};
+
 // Called when buffer is completely filled
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
@@ -94,6 +97,7 @@ DCC_MSG Packet;
 void setup()
 {
   pinMode(ledPin, OUTPUT);
+  pinMode(debugPin, OUTPUT);
   Serial.begin(115200);
   xdev_out(uart_putc);
   MX_DMA_Init();
@@ -158,6 +162,11 @@ void loop()
   }
 }
 
+void notifyDccDataReady(void)
+{
+  feedbackDecoder1.callbackDccReceived();
+}
+
 void notifyDccAccTurnoutOutput(uint16_t Addr, uint8_t Direction, uint8_t OutputPower)
 {
   // Serial.printf("notifyDccAccTurnoutOutput: %u\n", Addr);
@@ -179,7 +188,7 @@ void notifyDccFunc(uint16_t Addr, DCC_ADDR_TYPE AddrType, FN_GROUP FuncGrp, uint
 void notifyDccSpeed(uint16_t Addr, DCC_ADDR_TYPE AddrType, uint8_t Speed, DCC_DIRECTION Dir, DCC_SPEED_STEPS SpeedSteps)
 {
   // Serial.printf("notifyDccSpeed: %u\n", Addr);
-  feedbackDecoder1.callbackLocoAddrReceived(Addr);
+    feedbackDecoder1.callbackLocoAddrReceived(Addr);
 }
 
 uint8_t notifyCVValid(uint16_t CV, uint8_t Writable)

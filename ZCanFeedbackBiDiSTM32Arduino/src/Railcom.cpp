@@ -123,29 +123,65 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
     //     m_railcomData[m_railcomDetectionPort].lastChannelData = 0xFF;
     // }
 
-    // channel 2
-    if (channel2.size >= 2)
+    if (m_locoAddrReceived)
     {
-        // at least 2 bytes
-        // run through analytics of every two bytes
-        for (size_t i = 1; i < channel2.size; i++)
+        // channel 2
+        if (channel2.size > 0)
         {
-            if ((channel2.bytes[i].startIndex - channel2.bytes[i - 1].endIndex) < 6) // one byte commes direct after another
+            // at least 2 bytes
+            // run through analytics of every two bytes
+            for (size_t i = 1; i < channel2.size; i++)
             {
-                uint8_t highByte{channel2.bytes[i - 1].data};
-                uint8_t lowByte{channel2.bytes[i].data};
+                uint8_t firstByte = channel2.bytes[i - 1].data;
+                if ((0x40 == firstByte) || (0x41 == firstByte) || (0x42 == firstByte))
+                {
+                    // NACK, ACK, BUSY
+                    if (4 == channel2.bytes[i - 1].direction)
+                    {
+                        m_channel2Direction = 0x10;
+                    }
+                    if (-4 == channel2.bytes[i - 1].direction)
+                    {
+                        m_channel2Direction = 0x11;
+                    }
+                    std::array<uint16_t, 4> data = {1, 2, 3, 4};
+                    handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
+                    break;
+                }
+                else if (firstByte < 0x40)
+                {
+                    uint8_t railcomId{(channel2.bytes[i - 1].data >> 2u) & static_cast<uint8_t>(0xFu)};
+                    switch (railcomId)
+                    {
+                    case 0:
+                    case 3:
+                    case 7:
+                    case 12:
 
-                if (4 == channel2.bytes[i - 1].direction)
-                {
-                    m_channel2Direction = 0x10;
+                        if ((channel2.bytes[i].startIndex - channel2.bytes[i - 1].endIndex) < 6) // one byte commes direct after another
+                        {
+                            uint8_t highByte{channel2.bytes[i - 1].data};
+                            uint8_t lowByte{channel2.bytes[i].data};
+                            uint8_t railcomId = (highByte >> 2) & 0xF;
+
+                            if (4 == channel2.bytes[i - 1].direction)
+                            {
+                                m_channel2Direction = 0x10;
+                            }
+                            if (-4 == channel2.bytes[i - 1].direction)
+                            {
+                                m_channel2Direction = 0x11;
+                            }
+                            std::array<uint16_t, 4> data = {1, 2, 3, 4};
+                            handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
+                            break;
+                        }
+                        break;
+
+                    default:
+                        break;
+                    }
                 }
-                if (-4 == channel2.bytes[i - 1].direction)
-                {
-                    m_channel2Direction = 0x11;
-                }
-                std::array<uint16_t, 4> data = {1, 2, 3, 4};
-                handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
-                break;
             }
         }
     }
@@ -258,11 +294,12 @@ void Railcom::handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length
         channel.size = numberOfBytes;
     };
 
-    const size_t endOfChannel1{165}; // 193us after start does channel 2 start
+    // railcom pulse is at least 22us high while measurement was startet and last pulse has roundabout 40 seconds
+    const size_t endOfChannel1{130}; // 170us (channel 1) minus 40us
     size_t endOfSearch{(length - 1) > endOfChannel1 ? endOfChannel1 : length - 1};
-    analyzeStream(channel1, 0, endOfSearch);
+    analyzeStream(channel1, 25, endOfSearch);
 
-    const size_t startChannel2{170}; // 160us after start does channel 1 end
+    const size_t startChannel2{150}; // 10u after end of channel 1
     analyzeStream(channel2, startChannel2, length - 1);
 }
 

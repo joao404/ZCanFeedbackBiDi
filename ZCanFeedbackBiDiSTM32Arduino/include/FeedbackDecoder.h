@@ -49,13 +49,15 @@ public:
     };
 
     FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
-                    int configAnalogOffsetPin, int configIdPin, uint8_t& statusLed, void (*printFunc)(const char *, ...) = nullptr,
+                    int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...) = nullptr,
                     bool debug = false, bool zcanDebug = false, bool railcomDebug = false);
     virtual ~FeedbackDecoder();
 
     void begin();
 
     void cyclic();
+
+    void callbackDccReceived();
 
     void callbackAccAddrReceived(uint16_t addr);
 
@@ -107,7 +109,7 @@ protected:
 
     uint32_t m_idPrgIntervalINms{60000}; // 1 min
 
-    uint8_t& m_statusLed;
+    uint8_t &m_statusLed;
 
     uint32_t m_lastCanCmdSendINms{0};
     // jitter used for sending cyclic ping
@@ -132,21 +134,25 @@ protected:
 
     std::array<TrackData, 8> m_trackData;
 
-    uint8_t m_detectionPort{0};
-
-    uint8_t m_currentSenseMeasurement{0};
-
-    const uint8_t m_currentSenseMeasurementMax{20};
-
-    uint16_t m_currentSenseSum{0};
-
-    std::array<uint16_t, 512> m_adcDmaBuffer;
-
     uint16_t m_trackSetVoltage{0};
 
-    bool m_railcomCutOutActive{true};
+    uint8_t m_detectionPort{0};
 
-    bool m_railcomDataProcessed{true};
+    std::array<uint16_t, 128> m_adcDmaBufferCurrentSense;
+
+    bool m_measurementCurrentSenseTriggered{false};
+
+    bool m_measurementCurrentSenseRunning{false};
+
+    bool m_measurementCurrentSenseProcessed{true};
+
+    std::array<uint16_t, 512> m_adcDmaBufferRailcom;
+
+    bool m_measurementRailcomTriggered{false};
+
+    bool m_measurementRailcomRunning{false};
+
+    bool m_measurementRailcomProcessed{true};
 
     // adress is 0x8000 up tp 0xC000
     bool notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr);

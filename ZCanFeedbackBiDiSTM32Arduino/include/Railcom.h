@@ -97,6 +97,8 @@ protected:
 
     uint16_t m_lastRailcomAddress{0};
 
+    bool m_locoAddrReceived{false};
+
     uint32_t m_railcomDataTimeoutINms{1000};
 
     uint32_t m_railcomDataChangeCycleINms{100};

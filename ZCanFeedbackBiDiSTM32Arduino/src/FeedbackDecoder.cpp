@@ -151,7 +151,8 @@ void FeedbackDecoder::begin()
                 m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
             }
         }
-        setChannel(m_trackData[m_railcomDetectionPort].pin);
+        configContinuousDmaMode();                           // 6us
+        setChannel(m_trackData[m_railcomDetectionPort].pin); // 4us
     }
     else
     {
@@ -182,11 +183,13 @@ void FeedbackDecoder::begin()
 void FeedbackDecoder::cyclic()
 {
     unsigned long currentTimeINms{millis()};
+    ///////////////////////////////////////////////////////////////////////////
     if ((m_lastCanCmdSendINms + m_pingIntervalINms) < currentTimeINms)
     {
         sendPing(m_masterId, m_modulType, m_sessionId);
         m_lastCanCmdSendINms = currentTimeINms;
     }
+    ///////////////////////////////////////////////////////////////////////////
     if (m_idPrgRunning)
     {
         if ((m_idPrgStartTimeINms + m_idPrgIntervalINms) < currentTimeINms)
@@ -194,13 +197,14 @@ void FeedbackDecoder::cyclic()
             m_idPrgRunning = false;
         }
     }
+    ///////////////////////////////////////////////////////////////////////////
     if (!digitalRead(m_configIdPin))
     {
         // button pressed
         m_idPrgRunning = true;
         m_idPrgStartTimeINms = currentTimeINms;
     }
-
+    ///////////////////////////////////////////////////////////////////////////
     if (Detection::Digital == m_detectionConfig)
     {
         bool state = !digitalRead(m_trackData[m_detectionPort].pin);
@@ -212,31 +216,24 @@ void FeedbackDecoder::cyclic()
             m_detectionPort = 0;
         }
     }
-
-    if (!m_railcomCutOutActive)
+    ///////////////////////////////////////////////////////////////////////////
+    if ((Detection::Railcom == m_detectionConfig) || (Detection::CurrentSense == m_detectionConfig))
     {
-        // during DCC transmission, sample current over several times and detect if something is on the rail
-        setChannel(m_trackData[m_detectionPort].pin);
-        // Start ADC Conversion
-        HAL_ADC_Start(&hadc1);
-        // Poll ADC1 Perihperal & TimeOut = 1mSec
-        HAL_ADC_PollForConversion(&hadc1, 1);
-        // Read The ADC Conversion Result & Map It To PWM DutyCycle
-        uint16_t currentMeasurement = HAL_ADC_GetValue(&hadc1);
-        if (currentMeasurement > m_trackData[m_detectionPort].voltageOffset)
+        if (m_measurementCurrentSenseTriggered && !m_measurementCurrentSenseRunning && !m_measurementCurrentSenseProcessed)
         {
-            m_currentSenseSum += (currentMeasurement - m_trackData[m_detectionPort].voltageOffset);
-        }
-        else
-        {
-            m_currentSenseSum += (m_trackData[m_detectionPort].voltageOffset - currentMeasurement);
-        }
-
-        m_currentSenseMeasurement++;
-
-        if (m_currentSenseMeasurementMax <= m_currentSenseMeasurement)
-        {
-            m_currentSenseSum /= m_currentSenseMeasurementMax;
+            uint16_t m_currentSenseSum{0};
+            for (uint16_t &measurement : m_adcDmaBufferCurrentSense)
+            {
+                if (measurement > m_trackData[m_detectionPort].voltageOffset)
+                {
+                    m_currentSenseSum += (measurement - m_trackData[m_detectionPort].voltageOffset);
+                }
+                else
+                {
+                    m_currentSenseSum += (m_trackData[m_detectionPort].voltageOffset - measurement);
+                }
+            }
+            m_currentSenseSum /= m_adcDmaBufferCurrentSense.size();
             bool state = m_currentSenseSum > m_trackSetVoltage;
             auto trackSetFkt = [this]()
             {
@@ -258,29 +255,81 @@ void FeedbackDecoder::cyclic()
                 }
             };
             portStatusCheck(state, trackSetFkt, trackResetFkt);
-            m_currentSenseMeasurement = 0;
             m_detectionPort++;
+            if (m_trackData.size() > m_detectionPort)
+            {
+                m_measurementCurrentSenseRunning = true;
+                setChannel(m_trackData[m_detectionPort].pin);
+                // start ADC conversion
+                HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
+            }
+            else
+            {
+                // no more measurements
+                m_measurementCurrentSenseTriggered = false;
+            }
+            m_measurementCurrentSenseProcessed = true;
         }
-        if (m_trackData.size() <= m_detectionPort)
+
+        ///////////////////////////////////////////////////////////////////////////
+        // process Railcom data from ADC
+        if (m_measurementRailcomTriggered && !m_measurementRailcomRunning)
         {
-            m_detectionPort = 0;
+            if (!m_measurementRailcomProcessed)
+            {
+                // std::array<uint16_t, 512> dmaBuffer;
+                //  copy DMA buffer to make sure that data is not overwritten in case that we take to long to analyze
+                // dmaBuffer = m_adcDmaBuffer;
+                if (Detection::Railcom == m_detectionConfig)
+                {
+                    handleRailcomData(m_adcDmaBufferRailcom.begin(), 400, m_trackData[m_railcomDetectionPort].voltageOffset, m_trackSetVoltage);
+                }
+                m_measurementRailcomProcessed = true;
+                m_measurementRailcomTriggered = false;
+                m_locoAddrReceived = false;
+                //  trigger measurement of current sense
+                m_detectionPort = 0;
+                setChannel(m_trackData[m_detectionPort].pin);
+                // start ADC conversion
+                HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
+                m_measurementCurrentSenseTriggered = true;
+                m_measurementCurrentSenseRunning = true;
+            }
+        }
+        if (Detection::Railcom == m_detectionConfig)
+        {
+            Railcom::cyclic();
         }
     }
+}
 
-    // process Railcom data from ADC
-    if (Detection::Railcom == m_detectionConfig)
+void FeedbackDecoder::callbackDccReceived()
+{
+    // start detection of Railcom
+    if ((Detection::Railcom == m_detectionConfig) || (Detection::CurrentSense == m_detectionConfig))
     {
-        if (!m_railcomDataProcessed)
+        if (!m_measurementRailcomRunning)
         {
-            m_railcomDataProcessed = true;
-            std::array<uint16_t, 512> dmaBuffer;
-            // copy DMA buffer to make sure that data is not overwritten in case that we take to long to analyze
-            dmaBuffer = m_adcDmaBuffer;
+            m_measurementRailcomTriggered = true;
+            m_measurementRailcomRunning = true;
+            m_railcomDetectionMeasurement++;
+            // both ifs take 2us
+            if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
+            {
+                m_railcomData[m_railcomDetectionPort].lastChannelId = 0;
+                m_railcomData[m_railcomDetectionPort].lastChannelData = 0;
+                m_railcomDetectionMeasurement = 0;
+                m_railcomDetectionPort++;
+            }
+            if (m_trackData.size() <= m_railcomDetectionPort)
+            {
+                m_railcomDetectionPort = 0;
+            }
 
-            handleRailcomData(dmaBuffer.begin(), 400, m_trackData[m_railcomDetectionPort].voltageOffset, m_trackSetVoltage);
+            // after DMA was executed, configure next channel already to save time
+            setChannel(m_trackData[m_railcomDetectionPort].pin);                                                // 4us
+            HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferRailcom.begin(), m_adcDmaBufferRailcom.size()); // 26 us
         }
-
-        Railcom::cyclic();
     }
 }
 
@@ -297,40 +346,26 @@ void FeedbackDecoder::callbackAccAddrReceived(uint16_t addr)
 
 void FeedbackDecoder::callbackLocoAddrReceived(uint16_t addr)
 {
-    // start detection of Railcom
-    if ((Detection::Railcom == m_detectionConfig) || (Detection::CurrentSense == m_detectionConfig))
-    {
-        m_railcomCutOutActive = true;
-        m_railcomDataProcessed = true;
-        m_lastRailcomAddress = addr;
-        configContinuousDmaMode();
-        m_railcomDetectionMeasurement++;
-        if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
-        {
-            m_railcomData[m_railcomDetectionPort].lastChannelId = 0;
-            m_railcomData[m_railcomDetectionPort].lastChannelData = 0;
-            m_railcomDetectionMeasurement = 0;
-            m_railcomDetectionPort++;
-        }
-        if (m_trackData.size() <= m_railcomDetectionPort)
-        {
-            m_railcomDetectionPort = 0;
-        }
-        // after DMA was executed, configure next channel already to save time
-        setChannel(m_trackData[m_railcomDetectionPort].pin);
-        HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBuffer.begin(), m_adcDmaBuffer.size());
-    }
+    m_lastRailcomAddress = addr;
+    m_locoAddrReceived = true;
 }
 
 void FeedbackDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
 {
-    m_railcomCutOutActive = false;
-    m_currentSenseMeasurement = 0;
-    if (Detection::Railcom == m_detectionConfig)
+
+    if ((Detection::Railcom == m_detectionConfig) || (Detection::CurrentSense == m_detectionConfig))
     {
-        m_railcomDataProcessed = false;
+        if (m_measurementCurrentSenseTriggered)
+        {
+            m_measurementCurrentSenseRunning = false;
+            m_measurementCurrentSenseProcessed = false;
+        }
+        if (m_measurementRailcomTriggered)
+        {
+            m_measurementRailcomRunning = false;
+            m_measurementRailcomProcessed = false;
+        }
     }
-    configSingleMeasurementMode();
 }
 
 bool FeedbackDecoder::notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr)
