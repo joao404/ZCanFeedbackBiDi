@@ -25,16 +25,10 @@
 class z21 : public virtual ZCanInterfaceObserver, public virtual z21InterfaceObserver
 {
 public:
-    enum class AdrMode : uint8_t
-    {
-        Dcc = 0x00,
-        Motorola = 0x01
-    };
     
     struct ConfigLoco
     {
-        uint16_t adrZ21;
-        uint8_t mode;
+        uint16_t adr;
         uint8_t steps;
     };
 
@@ -106,5 +100,8 @@ private:
     void notifyz21InterfaceLocoFkt(uint16_t Adr, uint8_t type, uint8_t fkt) override;
     void notifyz21InterfaceLocoSpeed(uint16_t Adr, uint8_t speed, uint8_t stepConfig) override;
 
-    bool calcSpeedZ21toTrainbox(uint8_t data, uint8_t speedConfig, uint8_t &speed);
+    void handleGetLocoMode(uint16_t adr, uint8_t &mode) override;
+    void handleSetLocoMode(uint16_t adr, uint8_t mode) override;
+    void handleGetTurnOutMode(uint16_t adr, uint8_t &mode) override;
+    void handleSetTurnOutMode(uint16_t adr, uint8_t mode) override;
 };

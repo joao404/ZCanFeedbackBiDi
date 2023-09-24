@@ -54,7 +54,7 @@ if (!m_preferences.begin(m_namespaceZ21, true))
     readSize /= sizeof(ConfigLoco);
     for (size_t i = 0; i < readSize; i++)
     {
-      m_locos.emplace_back(ConfigLoco{buffer[i].adrZ21, buffer[i].mode, buffer[i].steps});
+      m_locos.emplace_back(ConfigLoco{buffer[i].adr, buffer[i].steps});
     }
 
     // if (preferences.getBytes(keyTurnOutMode, turnOutMode, sizeof(turnOutMode)) != sizeof(turnOutMode))
@@ -65,7 +65,7 @@ if (!m_preferences.begin(m_namespaceZ21, true))
   }
 
 
-  m_dps.setup(m_dccPin, m_ndccPin, true, ROCO, OFF); // with Railcom but shutdown by default
+  m_dps.setup(m_dccPin, m_ndccPin, DCC128, ROCO, OFF); // with Railcom but shutdown by default
   m_dps.setrailcom();                                // enable railcom
 
   //pinMode(m_shortPin, INPUT);     // set short pin
@@ -266,9 +266,13 @@ void z21::notifyz21InterfaceRailPower(EnergyState State)
 void z21::notifyz21InterfaceLocoState(uint16_t Adr, uint8_t data[])
 {
   m_dps.getLocoData(Adr, data);
-  // data[0] = static_cast<uint8_t>(StepConfig::Step128);
-  // data[1] = m_dps.getLocoSpeed(Adr);
-  // memset(&data[1], 0, 5);
+  for (auto finding = m_locos.begin(); finding != m_locos.end(); ++finding)
+  {
+    if (finding->adr == Adr)
+    {
+      data[0] = finding->steps;
+    }
+  }
 }
 
 void z21::notifyz21InterfaceLocoFkt(uint16_t Adr, uint8_t type, uint8_t fkt)
@@ -279,13 +283,26 @@ void z21::notifyz21InterfaceLocoFkt(uint16_t Adr, uint8_t type, uint8_t fkt)
 // //--------------------------------------------------------------------------------------------
 void z21::notifyz21InterfaceLocoSpeed(uint16_t Adr, uint8_t speed, uint8_t stepConfig)
 {
-  // int direction = speed & 0x80 ? 1 : -1;
-  // uint8_t dccSpeed = 0;
-  // if(calcSpeedZ21toTrainbox(speed, stepConfig, dccSpeed))
-  // {
-  //   //emergency stop
+  auto finding = m_locos.begin();
+  for (; finding != m_locos.end(); ++finding)
+  {
+    if (finding->adr == Adr)
+    {
+      if (finding->steps != stepConfig)
+      {
+        finding->steps = stepConfig;
+        saveLocoConfig();
+        break;
+      }
+    }
+  }
 
-  // }
+  if(finding == m_locos.end())
+  {
+    m_locos.emplace_back(ConfigLoco{Adr, stepConfig});
+    saveLocoConfig();
+  }
+
   switch (stepConfig)
   {
   case static_cast<uint8_t>(StepConfig::Step14):
@@ -320,27 +337,22 @@ void z21::notifyz21InterfacegetSystemInfo(uint8_t client)
   sendSystemInfo(client, 0, 50000, 77); // report System State to z21Interface clients
 }
 
-bool z21::calcSpeedZ21toTrainbox(uint8_t data, uint8_t speedConfig, uint8_t &speed)
+void z21::handleGetLocoMode(uint16_t adr, uint8_t &mode)
 {
-  bool emergencyStop = false;
-  if (0 == data)
-  {
-    speed = 0;
-  }
-  else if (1 == data)
-  {
-    emergencyStop = true;
-  }
-  else
-  {
-    if (static_cast<uint8_t>(StepConfig::Step28) == speedConfig)
-    {
-      speed = (((data & 0x0F) << 1) | ((data & 0x10) >> 4)) - 3;
-    }
-    else
-    {
-      speed = data - 1;
-    }
-  }
-  return emergencyStop;
+  mode = 0;//allways DCC
+}
+
+void z21::handleSetLocoMode(uint16_t adr, uint8_t mode)
+{
+// not needed
+}
+
+void z21::handleGetTurnOutMode(uint16_t adr, uint8_t &mode)
+{
+  mode = 0;// allways DCC
+}
+
+void z21::handleSetTurnOutMode(uint16_t adr, uint8_t mode)
+{
+  // not needed
 }
