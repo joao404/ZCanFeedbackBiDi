@@ -74,7 +74,7 @@ void setup()
   configAutoConnect.beginTimeout = 15000;
   configAutoConnect.autoReset = false;
 
-  configAutoConnect.homeUri = "/";
+  //configAutoConnect.homeUri = "/_ac";
 
   // reconnect with last ssid in handleClient
   configAutoConnect.autoReconnect = true;

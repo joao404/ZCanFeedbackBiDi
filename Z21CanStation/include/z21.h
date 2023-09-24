@@ -19,9 +19,25 @@
 #include "ZCan/ZCanInterfaceObserver.h"
 #include "z21/z21InterfaceObserver.h"
 #include "Preferences.h"
+#include <DCCPacketScheduler.h>
+#include <list>
 
 class z21 : public virtual ZCanInterfaceObserver, public virtual z21InterfaceObserver
 {
+public:
+    enum class AdrMode : uint8_t
+    {
+        Dcc = 0x00,
+        Motorola = 0x01
+    };
+    
+    struct ConfigLoco
+    {
+        uint16_t adrZ21;
+        uint8_t mode;
+        uint8_t steps;
+    };
+
 public:
     z21(uint16_t hash, uint32_t serialNumber, HwType hwType, uint32_t swVersion, void (*printFunc)(const char *, ...) = nullptr, bool debugz21 = false, bool debugZ21 = false, bool debugZCan = false);
     virtual ~z21();
@@ -31,7 +47,26 @@ public:
 
     void update(Observable &observable, void *data) override;
 
+    void deleteLocoConfig();
+
 private:
+
+    Preferences m_preferences;
+
+    const char *m_namespaceZ21{"z21"};
+
+    const char *m_keyLocoMode{"locomode"};
+
+    std::list<ConfigLoco> m_locos;
+
+    DCCPacketScheduler m_dps;
+
+    uint8_t m_powerState{0};
+
+    uint8_t m_dccPin{25};    //Pin for DCC sginal out
+    uint8_t m_ndccPin {26};
+    uint8_t m_shortPin {34};  //Pin to detect Short Circuit
+
     // const uint32_t z21Uid{0xBADEAFFE};
 
     uint16_t m_serialNumber;
@@ -39,6 +74,8 @@ private:
     bool m_debug;
 
     uint32_t m_lastPingSendTimeINms{0};
+
+    void saveLocoConfig();
 
     uint16_t getSerialNumber() override;
 
@@ -54,18 +91,20 @@ private:
     bool onAccessoryPort6(uint16_t accessoryId, uint8_t port, uint8_t type, uint16_t value) override;
 
     // Z21
-    // void notifyz21InterfacegetSystemInfo(uint8_t client) override;
+    void notifyz21InterfacegetSystemInfo(uint8_t client) override;
 
     void notifyz21InterfaceCANdetector(uint8_t client, uint8_t typ, uint16_t ID) override;
 
-    // void notifyz21InterfaceRailPower(EnergyState State) override;
+    void notifyz21InterfaceRailPower(EnergyState State) override;
 
     // void notifyz21InterfaceAccessoryInfo(uint16_t Adr, uint8_t &position) override;
     // void notifyz21InterfaceAccessory(uint16_t Adr, bool state, bool active) override;
 
     // // void notifyz21InterfaceExtAccessory(uint16_t Adr, byte state) override;
 
-    // void notifyz21InterfaceLocoState(uint16_t Adr, uint8_t data[]) override;
-    // void notifyz21InterfaceLocoFkt(uint16_t Adr, uint8_t type, uint8_t fkt) override;
-    // void notifyz21InterfaceLocoSpeed(uint16_t Adr, uint8_t speed, uint8_t stepConfig) override;
+    void notifyz21InterfaceLocoState(uint16_t Adr, uint8_t data[]) override;
+    void notifyz21InterfaceLocoFkt(uint16_t Adr, uint8_t type, uint8_t fkt) override;
+    void notifyz21InterfaceLocoSpeed(uint16_t Adr, uint8_t speed, uint8_t stepConfig) override;
+
+    bool calcSpeedZ21toTrainbox(uint8_t data, uint8_t speedConfig, uint8_t &speed);
 };
