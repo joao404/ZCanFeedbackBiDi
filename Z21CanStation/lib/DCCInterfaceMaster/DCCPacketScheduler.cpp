@@ -349,11 +349,11 @@ bool DCCPacketScheduler::setSpeed128(uint16_t address, uint8_t speed)
 //Lokfunktion setzten
 void DCCPacketScheduler::setLocoFunc(uint16_t address, uint8_t type, uint8_t fkt)
 {			//type => 0 = AUS; 1 = EIN; 2 = UM; 3 = error
-	bool fktbit = 0;	//neue zu ändernde fkt bit
+	bool fktbit = 0;	//neue zu ï¿½ndernde fkt bit
 	if (type == 1)	//ein
 		fktbit = 1;
 	byte Slot = LokStsgetSlot(address);
-	//zu änderndes bit bestimmen und neu setzten:
+	//zu ï¿½nderndes bit bestimmen und neu setzten:
 	if (fkt <= 4) {
 		byte func = LokDataUpdate[Slot].f0 & 0x1F;	//letztes Zustand der Funktionen 000 F0 F4..F1
 		if (type == 2) { //um
@@ -447,18 +447,18 @@ void DCCPacketScheduler::setLocoFunc(uint16_t address, uint8_t type, uint8_t fkt
 //Lokfunktion Binary State setzten
 void DCCPacketScheduler::setLocoFuncBinary(uint16_t address, uint8_t low, uint8_t high) {
 	/*	Preamble | 0AAA-AAAA | AAAA-AAAA | 110xxxxx | FLLL LLLL | HHHH HHHH | Err.Det.B
-		F Das oberste Bit F legt fest, ob der Binärzustand eingeschaltet oder ausgeschaltet ist.
-		LLLLLLL Die niederwertigen sieben (!) Bits der Binärzustandsadresse.
-		HHHHHHHH Die die höherwertigen acht Bits der Binärzustandsadresse. 
-		DCC Binärzustandssteuerungsbefehle werden drei Mal am Gleis ausgegeben, 
-		und danach gemäß RCN-212 nicht mehr regelmäßig wiederholt! */
+		F Das oberste Bit F legt fest, ob der Binï¿½rzustand eingeschaltet oder ausgeschaltet ist.
+		LLLLLLL Die niederwertigen sieben (!) Bits der Binï¿½rzustandsadresse.
+		HHHHHHHH Die die hï¿½herwertigen acht Bits der Binï¿½rzustandsadresse. 
+		DCC Binï¿½rzustandssteuerungsbefehle werden drei Mal am Gleis ausgegeben, 
+		und danach gemï¿½ï¿½ RCN-212 nicht mehr regelmï¿½ï¿½ig wiederholt! */
 		
-	if (high == 0) {	//Binärzustandsadressen < 128 ==> kurze Form
+	if (high == 0) {	//Binï¿½rzustandsadressen < 128 ==> kurze Form
 		
-		if ((low & 0x7F) < 29)	//nur Binärzustandsadressen von 29 bis 32767
+		if ((low & 0x7F) < 29)	//nur Binï¿½rzustandsadressen von 29 bis 32767
 			return;
 		
-		//Binärzustandssteuerungsbefehl kurze Form: 1101-1101 DLLL-LLLL
+		//Binï¿½rzustandssteuerungsbefehl kurze Form: 1101-1101 DLLL-LLLL
 		DCCPacket p(address);
 		uint8_t data[] = { B11011101, low}; 
 		p.addData(data, 2);
@@ -483,7 +483,7 @@ void DCCPacketScheduler::setLocoFuncBinary(uint16_t address, uint8_t low, uint8_
 		e_stop_queue.insertPacket(&p);
 	}
 	else { 	//bis max 32767
-		//Binärzustandssteuerungsbefehl lange Form: 1100-0000 DLLL-LLLL HHHH-HHHH
+		//Binï¿½rzustandssteuerungsbefehl lange Form: 1100-0000 DLLL-LLLL HHHH-HHHH
 		DCCPacket p(address);
 		uint8_t data[] = { B11000000, low, high}; 
 		p.addData(data, 3);
@@ -690,32 +690,32 @@ bool DCCPacketScheduler::setFunctions61to68(uint16_t address, uint8_t functions)
 }
 
 //---------------------------------------------------------------------------------
-byte DCCPacketScheduler::getFunktion0to4(uint16_t address)	//gibt Funktionszustand - F0 F4 F3 F2 F1 zurück
+byte DCCPacketScheduler::getFunktion0to4(uint16_t address)	//gibt Funktionszustand - F0 F4 F3 F2 F1 zurï¿½ck
 {
 	return LokDataUpdate[LokStsgetSlot(address)].f0 & 0x1F;
 }
 //---------------------------------------------------------------------------------
-byte DCCPacketScheduler::getFunktion5to8(uint16_t address)	//gibt Funktionszustand - F8 F7 F6 F5 zurück
+byte DCCPacketScheduler::getFunktion5to8(uint16_t address)	//gibt Funktionszustand - F8 F7 F6 F5 zurï¿½ck
 {
 	return LokDataUpdate[LokStsgetSlot(address)].f1 & 0x0F;
 }
 //---------------------------------------------------------------------------------
-byte DCCPacketScheduler::getFunktion9to12(uint16_t address)	//gibt Funktionszustand - F12 F11 F10 F9 zurück
+byte DCCPacketScheduler::getFunktion9to12(uint16_t address)	//gibt Funktionszustand - F12 F11 F10 F9 zurï¿½ck
 {
 	return LokDataUpdate[LokStsgetSlot(address)].f1 >> 4;
 }
 //---------------------------------------------------------------------------------
-byte DCCPacketScheduler::getFunktion13to20(uint16_t address)	//gibt Funktionszustand F20 - F13 zurück
+byte DCCPacketScheduler::getFunktion13to20(uint16_t address)	//gibt Funktionszustand F20 - F13 zurï¿½ck
 {
 	return LokDataUpdate[LokStsgetSlot(address)].f2;
 }
 //---------------------------------------------------------------------------------
-byte DCCPacketScheduler::getFunktion21to28(uint16_t address)	//gibt Funktionszustand F28 - F21 zurück
+byte DCCPacketScheduler::getFunktion21to28(uint16_t address)	//gibt Funktionszustand F28 - F21 zurï¿½ck
 {
 	return LokDataUpdate[LokStsgetSlot(address)].f3;
 }
 //---------------------------------------------------------------------------------
-byte DCCPacketScheduler::getFunktion29to31(uint16_t address)	//gibt Funktionszustand F31 - F29 zurück
+byte DCCPacketScheduler::getFunktion29to31(uint16_t address)	//gibt Funktionszustand F31 - F29 zurï¿½ck
 {
 	return LokDataUpdate[LokStsgetSlot(address)].f0 >> 5;
 }
@@ -774,7 +774,7 @@ bool DCCPacketScheduler::setBasicAccessoryPos(uint16_t address, bool state, bool
 	if (notifyTrnt)
 		notifyTrnt(address, state, activ);
 
-	bitWrite(BasicAccessory[address / 8], address % 8, state);	//pro SLOT immer 8 Zustände speichern!
+	bitWrite(BasicAccessory[address / 8], address % 8, state);	//pro SLOT immer 8 Zustï¿½nde speichern!
 
 	return e_stop_queue.insertPacket(&p);
 }
@@ -965,7 +965,7 @@ bool DCCPacketScheduler::opsProgramCV(uint16_t address, uint16_t CV, uint8_t CV_
 	DCCPacket p(address);
 	
 	// split the CV address up among data uint8_ts 0 and 1
-	uint8_t data[] = { ((CV >> 8) & B11) | B11101100, CV & 0xFF, CV_data };
+	uint8_t data[] = { static_cast<uint8_t>(((CV >> 8) & B11) | B11101100), static_cast<uint8_t>(CV & 0xFF), CV_data };
 
 	p.addData(data, 3);
 	p.setKind(pom_mode_programming_kind);
@@ -991,7 +991,7 @@ bool DCCPacketScheduler::opsPOMwriteBit(uint16_t address, uint16_t CV, uint8_t B
 
 	DCCPacket p(address);
 	// split the CV address up among data uint8_ts 0 and 1
-	uint8_t data[] = { ((CV >> 8) & B11) | B11101000, CV & 0xFF, Bit_data & 0x0F};
+	uint8_t data[] = { static_cast<uint8_t>(((CV >> 8) & B11) | B11101000), static_cast<uint8_t>(CV & 0xFF), static_cast<uint8_t>(Bit_data & 0x0F)};
 
 	p.addData(data, 3);
 	p.setKind(pom_mode_programming_kind);
@@ -1015,7 +1015,7 @@ bool DCCPacketScheduler::opsPOMreadCV(uint16_t address, uint16_t CV)
 
 	DCCPacket p(address);
 	// split the CV address up among data uint8_ts 0 and 1
-	uint8_t data[] = { ((CV >> 8) & B11) | B11100100, CV & 0xFF, 0x00 };
+	uint8_t data[] = { static_cast<uint8_t>(((CV >> 8) & B11) | B11100100), static_cast<uint8_t>(CV & 0xFF), 0x00 };
 
 	p.addData(data, 3);
 	p.setKind(pom_mode_programming_kind);
@@ -1344,13 +1344,13 @@ void DCCPacketScheduler::getLocoData(uint16_t adr, uint8_t data[])
 }
 
 //--------------------------------------------------------------------------------------------
-//Gibt aktuelle Fahrtrichtung der Angefragen Lok zurück
+//Gibt aktuelle Fahrtrichtung der Angefragen Lok zurï¿½ck
 byte DCCPacketScheduler::getLocoDir(uint16_t adr)
 {
 	return bitRead(LokDataUpdate[LokStsgetSlot(adr)].speed, 7);
 }
 //--------------------------------------------------------------------------------------------
-//Gibt aktuelle Geschwindigkeit der Angefragen Lok zurück
+//Gibt aktuelle Geschwindigkeit der Angefragen Lok zurï¿½ck
 byte DCCPacketScheduler::getLocoSpeed(uint16_t adr)
 {
 	return LokDataUpdate[LokStsgetSlot(adr)].speed & 0x7F;
@@ -1358,7 +1358,7 @@ byte DCCPacketScheduler::getLocoSpeed(uint16_t adr)
 
 //--------------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------------
-byte DCCPacketScheduler::LokStsgetSlot(uint16_t adr)		//gibt Slot für Adresse zurück / erzeugt neuen Slot (0..126)
+byte DCCPacketScheduler::LokStsgetSlot(uint16_t adr)		//gibt Slot fï¿½r Adresse zurï¿½ck / erzeugt neuen Slot (0..126)
 {
 	byte Slot;
 	for (Slot = 0; Slot < SlotMax; Slot++) {
@@ -1371,7 +1371,7 @@ byte DCCPacketScheduler::LokStsgetSlot(uint16_t adr)		//gibt Slot für Adresse zu
 		}
 	}
 	//kein Slot mehr vorhanden!
-	//start am Anfang mit dem Überschreiben vorhandender Slots
+	//start am Anfang mit dem ï¿½berschreiben vorhandender Slots
 	Slot = slotFullNext;
 	LokStsSetNew(Slot, adr);	//clear Slot!
 	slotFullNext++;
@@ -1426,7 +1426,7 @@ void DCCPacketScheduler::RailComReceive(void) {
 	else if (RailComData == 0xFF)
 		RailComData = c;
 	/*
-	if (c < 0x40) {    //gültige Railcom Message empfangen
+	if (c < 0x40) {    //gï¿½ltige Railcom Message empfangen
 		//Serial.print(c, BIN);
 		//Serial.print(":");
 	}

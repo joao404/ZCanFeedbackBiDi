@@ -10,7 +10,7 @@
 * for ESP32 with Timer1
 ****************************************************************************/
 
-#define PREAMBLE_LENGTH 16	//1's for the preamble (NMRA mind. 10x, normal: 12x plus RailCom cutout)
+#define PREAMBLE_LENGTH 19	//1's for the preamble (NMRA mind. 10x, normal: 12x plus RailCom cutout)
 #define ADD_LONG_PREAMBLE_LENGTH 8	//additional length for Service Mode Packet
 #define RAILCOM_CUTOUT_LENGTH 4		//length the preamble will be cut out when railcom data will transmit
 
