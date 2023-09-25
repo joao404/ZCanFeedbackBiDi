@@ -244,11 +244,19 @@ void FeedbackDecoder::cyclic()
             {
                 if (Detection::Railcom == m_detectionConfig)
                 {
+                    // TODO
 
                     for (auto &railcomAddr : m_railcomData[m_detectionPort].railcomAddr)
                     {
-
+                        if (0 != railcomAddr.address)
+                        {
+                            if (m_debug)
+                            {
+                                ZCanInterfaceObserver::m_printFunc("Loco left:0x%X\n", railcomAddr.address);
+                            }
+                        }
                         railcomAddr.address = 0;
+                        railcomAddr.direction = 0;
                         railcomAddr.lastChangeTimeINms = millis();
                     }
                     notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
@@ -316,8 +324,10 @@ void FeedbackDecoder::callbackDccReceived()
             // both ifs take 2us
             if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
             {
-                m_railcomData[m_railcomDetectionPort].lastChannelId = 0;
-                m_railcomData[m_railcomDetectionPort].lastChannelData = 0;
+                // m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 0;
+                // m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 0;
+                // m_railcomData[m_railcomDetectionPort].lastChannelData[0] = 0;
+                // m_railcomData[m_railcomDetectionPort].lastChannelData[1] = 0;
                 m_railcomDetectionMeasurement = 0;
                 m_railcomDetectionPort++;
             }
@@ -427,6 +437,8 @@ void FeedbackDecoder::callbackRailcomLocoAppeared(void)
 
 void FeedbackDecoder::callbackRailcomLocoLeft(void)
 {
+
+    notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
 }
 
 //---------------------------------------------------------------------------

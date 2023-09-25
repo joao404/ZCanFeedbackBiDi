@@ -32,8 +32,8 @@ public:
     typedef struct
     {
         std::array<RailcomAddr, 4> railcomAddr;
-        uint8_t lastChannelId;
-        uint16_t lastChannelData;
+        std::array<uint8_t, 2> lastChannelId;
+        std::array<uint16_t, 2> lastChannelData;
     } RailcomData;
 
     enum class Channel : uint8_t
@@ -109,7 +109,7 @@ protected:
 
     uint8_t m_railcomDetectionMeasurement{0};
 
-    const uint8_t m_maxNumberOfConsecutiveMeasurements{4};
+    const uint8_t m_maxNumberOfConsecutiveMeasurements{3};
 
     uint16_t m_channel1Direction{0};
 

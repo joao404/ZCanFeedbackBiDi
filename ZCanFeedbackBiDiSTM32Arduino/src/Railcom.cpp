@@ -23,8 +23,8 @@ Railcom::Railcom(void (*printFunc)(const char *, ...), bool debug)
     for (auto &data : m_railcomData)
     {
         data.railcomAddr.fill({0, 0, 0, false});
-        data.lastChannelId = 0;
-        data.lastChannelData = 0;
+        data.lastChannelId = {0, 0};
+        data.lastChannelData = {0, 0};
     }
 }
 
@@ -48,6 +48,7 @@ void Railcom::cyclic()
                 }
                 data.address = 0;
                 data.direction = 0;
+                data.lastChangeTimeINms = millis();
                 // TODO: save portnumber with trackData to use more for functions
                 // notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_detectionPort].railcomAddr);
                 callbackRailcomLocoLeft();
@@ -88,14 +89,40 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
                     // check if start index of first byte is near second byte start index
                     uint8_t railcomId = (highByte >> 2) & 0xF;
                     uint16_t railcomValue = ((highByte & 0x03) << 6) | (lowByte & 0x3F);
-                    uint16_t locoAddr{0};
-                    if ((0x01 == m_railcomData[m_railcomDetectionPort].lastChannelId) && (0x02 == railcomId))
+                    if((1!= railcomId) &&(2!=railcomId) )
                     {
-                        locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData & 0x3F) << 8) | railcomValue;
+                        continue;
                     }
-                    else if ((0x02 == m_railcomData[m_railcomDetectionPort].lastChannelId) && (0x01 == railcomId))
+                    uint16_t locoAddr{0};
+                    if(0x01 == railcomId)
                     {
-                        locoAddr = ((railcomValue & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].lastChannelData;
+                        if(m_railcomData[m_railcomDetectionPort].lastChannelId[0] != railcomId)
+                        {
+                            m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 1;
+                            if(m_railcomData[m_railcomDetectionPort].lastChannelData[0] != railcomValue)
+                            {
+                                 m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 0;
+                                m_railcomData[m_railcomDetectionPort].lastChannelData[1] = 0;
+                            }
+                            m_railcomData[m_railcomDetectionPort].lastChannelData[0] = railcomValue;
+                        }
+                    }
+                    else if(0x02 == railcomId)
+                    {
+                        if(m_railcomData[m_railcomDetectionPort].lastChannelId[1] != railcomId)
+                        {
+                            m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 1;
+                            if(m_railcomData[m_railcomDetectionPort].lastChannelData[1] != railcomValue)
+                            {
+                                 m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 0;
+                            m_railcomData[m_railcomDetectionPort].lastChannelData[0] = 0;
+                            }
+                            m_railcomData[m_railcomDetectionPort].lastChannelData[1] = railcomValue;
+                        }
+                    }
+                    if((1==m_railcomData[m_railcomDetectionPort].lastChannelId[0]) && (1==m_railcomData[m_railcomDetectionPort].lastChannelId[1]))
+                    {
+                        locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].lastChannelData[1];
                     }
 
                     if ((4 == channel1.bytes[i - 1].direction) && (4 == channel1.bytes[i].direction))
@@ -106,10 +133,12 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
                     {
                         m_channel1Direction = 0x11;
                     }
-                    std::array<uint16_t, 4> data = {m_railcomData[m_railcomDetectionPort].lastChannelId, m_railcomData[m_railcomDetectionPort].lastChannelData, railcomId, railcomValue};
+                    std::array<uint16_t, 4> data = {m_railcomData[m_railcomDetectionPort].lastChannelId[0], m_railcomData[m_railcomDetectionPort].lastChannelData[0], m_railcomData[m_railcomDetectionPort].lastChannelId[1], m_railcomData[m_railcomDetectionPort].lastChannelData[1]};
                     handleFoundLocoAddr(locoAddr, m_channel1Direction, Channel::eChannel1, data);
-                    m_railcomData[m_railcomDetectionPort].lastChannelId = railcomId;
-                    m_railcomData[m_railcomDetectionPort].lastChannelData = railcomValue;
+                    // m_printFunc("L %X %X %X %X\n", railcomId, railcomValue, m_railcomData[m_railcomDetectionPort].lastChannelId, m_railcomData[m_railcomDetectionPort].lastChannelData);
+
+                    // m_railcomData[m_railcomDetectionPort].lastChannelId = railcomId;
+                    // m_railcomData[m_railcomDetectionPort].lastChannelData = railcomValue;
                     // dataReceivedChannel1 = true;
                     break;
                 }
@@ -295,9 +324,9 @@ void Railcom::handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length
     };
 
     // railcom pulse is at least 22us high while measurement was startet and last pulse has roundabout 40 seconds
-    const size_t endOfChannel1{130}; // 170us (channel 1) minus 40us
+    const size_t endOfChannel1{150}; // 170us (channel 1) minus 40us
     size_t endOfSearch{(length - 1) > endOfChannel1 ? endOfChannel1 : length - 1};
-    analyzeStream(channel1, 25, endOfSearch);
+    analyzeStream(channel1, 15, endOfSearch);
 
     const size_t startChannel2{150}; // 10u after end of channel 1
     analyzeStream(channel2, startChannel2, length - 1);
@@ -339,7 +368,7 @@ void Railcom::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel
                     if (m_debug)
                     {
                         m_printFunc("Loco appeared:0x%X D:0x%X at %d:%d\n", locoAddr, direction, m_railcomDetectionPort, channel);
-                        m_printFunc("%x %x %x %x\n", railcomData[0], railcomData[1], railcomData[2], railcomData[3]);
+                        //m_printFunc("%x %x %x %x\n", railcomData[0], railcomData[1], railcomData[2], railcomData[3]);
                     }
                     data.changeReported = false;
                     checkRailcomDataChange(data);
