@@ -20,7 +20,8 @@
 RailcomDecoder::RailcomDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
                                int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),
                                bool debug, bool zcanDebug, bool railcomDebug)
-    : FeedbackDecoder(modulConfig, saveDataFkt, trackPin, configAnalogOffsetPin, configIdPin, statusLed, printFunc, debug, zcanDebug)
+    : FeedbackDecoder(modulConfig, saveDataFkt, trackPin, configAnalogOffsetPin, configIdPin, statusLed, printFunc, debug, zcanDebug),
+m_railcomDebug(railcomDebug)
 {
 }
 RailcomDecoder::~RailcomDecoder()
@@ -96,7 +97,7 @@ void RailcomDecoder::cyclic()
                 {
                     if (0 != railcomAddr.address)
                     {
-                        if (m_debug)
+                        if (m_railcomDebug)
                         {
                             ZCanInterfaceObserver::m_printFunc("Loco left:0x%X\n", railcomAddr.address);
                         }
@@ -155,7 +156,7 @@ void RailcomDecoder::cyclic()
         {
             if ((m_railcomDataTimeoutINms + data.lastChangeTimeINms) < millis())
             {
-                if (m_debug)
+                if (m_railcomDebug)
                 {
                     m_printFunc("Loco left:0x%X\n", data.address);
                 }
@@ -235,13 +236,13 @@ bool RailcomDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t
         {
             if (0x11 == type)
             {
-                if (m_debug)
+                if (m_railcomDebug)
                     ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
                 result = sendAccessoryDataAck(m_modulId, port, type, (m_railcomData[port].railcomAddr[0].direction << 14) | m_railcomData[port].railcomAddr[0].address, (m_railcomData[port].railcomAddr[1].direction << 14) | m_railcomData[port].railcomAddr[1].address);
             }
             else if (0x12 == type)
             {
-                if (m_debug)
+                if (m_railcomDebug)
                     ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
                 result = sendAccessoryDataAck(m_modulId, port, type, (m_railcomData[port].railcomAddr[2].direction << 14) | m_railcomData[port].railcomAddr[2].address, (m_railcomData[port].railcomAddr[3].direction << 14) | m_railcomData[port].railcomAddr[3].address);
             }
@@ -534,7 +535,7 @@ void RailcomDecoder::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, 
                 if (direction != data.direction)
                 {
                     data.direction = direction;
-                    if (m_debug)
+                    if (m_railcomDebug)
                     {
                         m_printFunc("Loco dir changed:0x%X 0x%X at %d\n", locoAddr, direction, channel);
                     }
@@ -554,7 +555,7 @@ void RailcomDecoder::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, 
                 {
                     data.address = locoAddr;
                     data.direction = direction;
-                    if (m_debug)
+                    if (m_railcomDebug)
                     {
                         m_printFunc("Loco appeared:0x%X D:0x%X at %d:%d\n", locoAddr, direction, m_railcomDetectionPort, channel);
                         //m_printFunc("%x %x %x %x\n", railcomData[0], railcomData[1], railcomData[2], railcomData[3]);

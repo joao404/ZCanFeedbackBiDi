@@ -145,22 +145,6 @@ protected:
 
     uint8_t m_detectionPort{0};
 
-    std::array<uint16_t, 128> m_adcDmaBufferCurrentSense;
-
-    bool m_measurementCurrentSenseTriggered{false};
-
-    bool m_measurementCurrentSenseRunning{false};
-
-    bool m_measurementCurrentSenseProcessed{true};
-
-    std::array<uint16_t, 512> m_adcDmaBufferRailcom;
-
-    bool m_measurementRailcomTriggered{false};
-
-    bool m_measurementRailcomRunning{false};
-
-    bool m_measurementRailcomProcessed{true};
-
     bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
 
     void portStatusCheck(bool state, std::function<void(void)> callbackTrackSet, std::function<void(void)> callbackTrackReset);

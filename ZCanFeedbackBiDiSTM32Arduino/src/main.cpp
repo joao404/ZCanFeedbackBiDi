@@ -19,6 +19,7 @@
 #include "ZCan/CanInterfaceStm32.h"
 #include "FeedbackDecoder/FeedbackDecoder.h"
 #include "FeedbackDecoder/RailcomDecoder.h"
+#include "FeedbackDecoder/CurrentDecoder.h"
 #include "FunctionDecoder.h"
 #include "StatusLed.h"
 #include "Helper/xprintf.h"

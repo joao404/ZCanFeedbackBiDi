@@ -19,8 +19,9 @@
 
 CurrentDecoder::CurrentDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
                                int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),
-                               bool debug, bool zcanDebug, bool railcomDebug)
-    : FeedbackDecoder(modulConfig, saveDataFkt, trackPin, configAnalogOffsetPin, configIdPin, statusLed, printFunc, debug, zcanDebug)
+                               bool debug, bool zcanDebug, bool currentDebug)
+    : FeedbackDecoder(modulConfig, saveDataFkt, trackPin, configAnalogOffsetPin, configIdPin, statusLed, printFunc, debug, zcanDebug),
+    m_currentDebug(currentDebug)
 {
 }
 CurrentDecoder::~CurrentDecoder()
@@ -58,7 +59,7 @@ void CurrentDecoder::configInputs()
         }
     }
     configContinuousDmaMode();                           // 6us
-    setChannel(m_trackData[m_railcomDetectionPort].pin); // 4us
+    setChannel(m_trackData[m_detectionPort].pin); // 4us
 }
 
 void CurrentDecoder::cyclic()
@@ -83,30 +84,11 @@ void CurrentDecoder::cyclic()
         bool state = m_currentSenseSum > m_trackSetVoltage;
         auto trackSetFkt = [this]()
         {
-            notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
         };
 
         auto trackResetFkt = [this]()
         {
-            if (Detection::Railcom == m_detectionConfig)
-            {
-                // TODO
-
-                for (auto &railcomAddr : m_railcomData[m_detectionPort].railcomAddr)
-                {
-                    if (0 != railcomAddr.address)
-                    {
-                        if (m_debug)
-                        {
-                            ZCanInterfaceObserver::m_printFunc("Loco left:0x%X\n", railcomAddr.address);
-                        }
-                    }
-                    railcomAddr.address = 0;
-                    railcomAddr.direction = 0;
-                    railcomAddr.lastChangeTimeINms = millis();
-                }
-                notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
-            }
+            
         };
         portStatusCheck(state, trackSetFkt, trackResetFkt);
         m_detectionPort++;
@@ -132,41 +114,11 @@ void CurrentDecoder::cyclic()
         {
             m_measurementRailcomProcessed = true;
             m_measurementRailcomTriggered = false;
-            m_locoAddrReceived = false;
             //  trigger measurement of current sense
-            m_detectionPort = 0;
-            setChannel(m_trackData[m_detectionPort].pin);
-            // start ADC conversion
             HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
             m_measurementCurrentSenseTriggered = true;
             m_measurementCurrentSenseRunning = true;
         }
-    }
-
-    // check for address data which was not renewed
-    for (auto &data : m_railcomData[m_railcomDetectionPort].railcomAddr)
-    {
-        // check if a address, that is currently present, was not refreshed since timeout
-        if (0 != data.address)
-        {
-            if ((m_railcomDataTimeoutINms + data.lastChangeTimeINms) < millis())
-            {
-                if (m_debug)
-                {
-                    m_printFunc("Loco left:0x%X\n", data.address);
-                }
-                data.address = 0;
-                data.direction = 0;
-                data.lastChangeTimeINms = millis();
-                // TODO: save portnumber with trackData to use more for functions
-                // notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_detectionPort].railcomAddr);
-                notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
-            }
-        }
-
-        // check if any change of address needs to be reported
-        // used for delay reported of comming/going address
-        checkRailcomDataChange(data);
     }
 }
 
@@ -176,29 +128,14 @@ void CurrentDecoder::callbackDccReceived()
     {
         m_measurementRailcomTriggered = true;
         m_measurementRailcomRunning = true;
-        m_railcomDetectionMeasurement++;
-        // both ifs take 2us
-        if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
-        {
-            m_railcomDetectionMeasurement = 0;
-            m_railcomDetectionPort++;
-        }
-        if (m_trackData.size() <= m_railcomDetectionPort)
-        {
-            m_railcomDetectionPort = 0;
-        }
-
-        // after DMA was executed, configure next channel already to save time
-        setChannel(m_trackData[m_railcomDetectionPort].pin);                                                // 4us
+        m_detectionPort = 0;
+        setChannel(m_trackData[m_detectionPort].pin);                                              // 4us
         HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferRailcom.begin(), m_adcDmaBufferRailcom.size()); // 26 us
     }
 }
 
 void CurrentDecoder::callbackLocoAddrReceived(uint16_t addr)
 {
-
-    m_lastRailcomAddress = addr;
-    m_locoAddrReceived = true;
 }
 
 void CurrentDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc) 
@@ -213,28 +150,4 @@ void CurrentDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
             m_measurementRailcomRunning = false;
             m_measurementRailcomProcessed = false;
         }
-}
-
-bool CurrentDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type)
-{
-    bool result{false};
-    if ((accessoryId == m_modulId) || ((accessoryId & 0xF000) == modulNidMin))
-    {
-        if (port < m_trackData.size())
-        {
-            if (0x11 == type)
-            {
-                if (m_debug)
-                    ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
-                result = sendAccessoryDataAck(m_modulId, port, type, (m_railcomData[port].railcomAddr[0].direction << 14) | m_railcomData[port].railcomAddr[0].address, (m_railcomData[port].railcomAddr[1].direction << 14) | m_railcomData[port].railcomAddr[1].address);
-            }
-            else if (0x12 == type)
-            {
-                if (m_debug)
-                    ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
-                result = sendAccessoryDataAck(m_modulId, port, type, (m_railcomData[port].railcomAddr[2].direction << 14) | m_railcomData[port].railcomAddr[2].address, (m_railcomData[port].railcomAddr[3].direction << 14) | m_railcomData[port].railcomAddr[3].address);
-            }
-        }
-    }
-    return result;
 }

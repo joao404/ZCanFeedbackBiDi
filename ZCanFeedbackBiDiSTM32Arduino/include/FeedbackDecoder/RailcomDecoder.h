@@ -18,6 +18,7 @@
 
 #include "Arduino.h"
 #include "FeedbackDecoder/FeedbackDecoder.h"
+#include <array>
 
 class RailcomDecoder : public FeedbackDecoder
 {
@@ -102,9 +103,25 @@ protected:
         // adress is 0x8000 up tp 0xC000
     bool notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr);
 
-    bool m_debug;
+    bool m_railcomDebug;
 
     void (*m_printFunc)(const char *, ...);
+
+    std::array<uint16_t, 128> m_adcDmaBufferCurrentSense;
+
+    bool m_measurementCurrentSenseTriggered{false};
+
+    bool m_measurementCurrentSenseRunning{false};
+
+    bool m_measurementCurrentSenseProcessed{true};
+
+    std::array<uint16_t, 512> m_adcDmaBufferRailcom;
+
+    bool m_measurementRailcomTriggered{false};
+
+    bool m_measurementRailcomRunning{false};
+
+    bool m_measurementRailcomProcessed{true};
 
     uint16_t *m_dmaBufferIN1samplePer1us;
 
