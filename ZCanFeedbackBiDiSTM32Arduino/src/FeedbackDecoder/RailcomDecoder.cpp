@@ -1,7 +1,7 @@
 /*********************************************************************
- * Railcom
+ * Railcom Decoder
  *
- * Copyright (C) 2022 Marcel Maage
+ * Copyright (C) 2023 Marcel Maage
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -14,26 +14,139 @@
  * LICENSE file for more details.
  */
 
-#include "Railcom.h"
+#include "FeedbackDecoder/RailcomDecoder.h"
+#include "Arduino.h"
 
-Railcom::Railcom(void (*printFunc)(const char *, ...), bool debug)
-    : m_debug(debug),
-      m_printFunc(printFunc)
+RailcomDecoder::RailcomDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
+                               int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),
+                               bool debug, bool zcanDebug, bool railcomDebug)
+    : FeedbackDecoder(modulConfig, saveDataFkt, trackPin, configAnalogOffsetPin, configIdPin, statusLed, printFunc, debug, zcanDebug)
 {
-    for (auto &data : m_railcomData)
+}
+RailcomDecoder::~RailcomDecoder()
+{
+}
+
+void RailcomDecoder::configInputs()
+{
+    pinMode(m_configAnalogOffsetPin, INPUT_PULLUP);
+    //  this is done outside of FeedbackDecoder
+    if (!digitalRead(m_configAnalogOffsetPin))
     {
-        data.railcomAddr.fill({0, 0, 0, false});
-        data.lastChannelId = {0, 0};
-        data.lastChannelData = {0, 0};
+        ZCanInterfaceObserver::m_printFunc("Offset measuring\n");
+        configSingleMeasurementMode();
+        // read current values of adcs as default value
+        for (uint8_t port = 0; port < m_trackData.size(); ++port)
+        {
+            setChannel(m_trackData[port].pin);
+            // Start ADC Conversion
+            HAL_ADC_Start(&hadc1);
+            // Poll ADC1 Perihperal & TimeOut = 1mSec
+            HAL_ADC_PollForConversion(&hadc1, 1);
+            // Read The ADC Conversion Result & Map It To PWM DutyCycle
+            m_trackData[port].voltageOffset = HAL_ADC_GetValue(&hadc1);
+            m_modulConfig.voltageOffset[port] = m_trackData[port].voltageOffset;
+            ZCanInterfaceObserver::m_printFunc("Offset measurement port %d: %d\n", port, m_modulConfig.voltageOffset[port]);
+        }
+        m_saveDataFkt();
     }
+    else
+    {
+        for (uint8_t port = 0; port < m_trackData.size(); ++port)
+        {
+            m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
+        }
+    }
+    configContinuousDmaMode();                           // 6us
+    setChannel(m_trackData[m_railcomDetectionPort].pin); // 4us
 }
 
-Railcom::~Railcom()
+void RailcomDecoder::cyclic()
 {
-}
+    FeedbackDecoder::cyclic();
 
-void Railcom::cyclic()
-{
+    if (m_measurementCurrentSenseTriggered && !m_measurementCurrentSenseRunning && !m_measurementCurrentSenseProcessed)
+    {
+        uint16_t m_currentSenseSum{0};
+        for (uint16_t &measurement : m_adcDmaBufferCurrentSense)
+        {
+            if (measurement > m_trackData[m_detectionPort].voltageOffset)
+            {
+                m_currentSenseSum += (measurement - m_trackData[m_detectionPort].voltageOffset);
+            }
+            else
+            {
+                m_currentSenseSum += (m_trackData[m_detectionPort].voltageOffset - measurement);
+            }
+        }
+        m_currentSenseSum /= m_adcDmaBufferCurrentSense.size();
+        bool state = m_currentSenseSum > m_trackSetVoltage;
+        auto trackSetFkt = [this]()
+        {
+            notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
+        };
+
+        auto trackResetFkt = [this]()
+        {
+            if (Detection::Railcom == m_detectionConfig)
+            {
+                // TODO
+
+                for (auto &railcomAddr : m_railcomData[m_detectionPort].railcomAddr)
+                {
+                    if (0 != railcomAddr.address)
+                    {
+                        if (m_debug)
+                        {
+                            ZCanInterfaceObserver::m_printFunc("Loco left:0x%X\n", railcomAddr.address);
+                        }
+                    }
+                    railcomAddr.address = 0;
+                    railcomAddr.direction = 0;
+                    railcomAddr.lastChangeTimeINms = millis();
+                }
+                notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
+            }
+        };
+        portStatusCheck(state, trackSetFkt, trackResetFkt);
+        m_detectionPort++;
+        if (m_trackData.size() > m_detectionPort)
+        {
+            m_measurementCurrentSenseRunning = true;
+            setChannel(m_trackData[m_detectionPort].pin);
+            // start ADC conversion
+            HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
+        }
+        else
+        {
+            // no more measurements
+            m_measurementCurrentSenseTriggered = false;
+        }
+        m_measurementCurrentSenseProcessed = true;
+    }
+    ///////////////////////////////////////////////////////////////////////////
+    // process Railcom data from ADC
+    if (m_measurementRailcomTriggered && !m_measurementRailcomRunning)
+    {
+        if (!m_measurementRailcomProcessed)
+        {
+            // std::array<uint16_t, 512> dmaBuffer;
+            //  copy DMA buffer to make sure that data is not overwritten in case that we take to long to analyze
+            // dmaBuffer = m_adcDmaBuffer;
+            analyzeRailcomData(m_adcDmaBufferRailcom.begin(), 400, m_trackData[m_railcomDetectionPort].voltageOffset, m_trackSetVoltage);
+            m_measurementRailcomProcessed = true;
+            m_measurementRailcomTriggered = false;
+            m_locoAddrReceived = false;
+            //  trigger measurement of current sense
+            m_detectionPort = 0;
+            setChannel(m_trackData[m_detectionPort].pin);
+            // start ADC conversion
+            HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
+            m_measurementCurrentSenseTriggered = true;
+            m_measurementCurrentSenseRunning = true;
+        }
+    }
+
     // check for address data which was not renewed
     for (auto &data : m_railcomData[m_railcomDetectionPort].railcomAddr)
     {
@@ -51,7 +164,7 @@ void Railcom::cyclic()
                 data.lastChangeTimeINms = millis();
                 // TODO: save portnumber with trackData to use more for functions
                 // notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_detectionPort].railcomAddr);
-                callbackRailcomLocoLeft();
+                notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
             }
         }
 
@@ -61,8 +174,84 @@ void Railcom::cyclic()
     }
 }
 
+void RailcomDecoder::callbackDccReceived()
+{
+    if (!m_measurementRailcomRunning)
+    {
+        m_measurementRailcomTriggered = true;
+        m_measurementRailcomRunning = true;
+        m_railcomDetectionMeasurement++;
+        // both ifs take 2us
+        if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
+        {
+            // m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 0;
+            // m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 0;
+            // m_railcomData[m_railcomDetectionPort].lastChannelData[0] = 0;
+            // m_railcomData[m_railcomDetectionPort].lastChannelData[1] = 0;
+            m_railcomDetectionMeasurement = 0;
+            m_railcomDetectionPort++;
+        }
+        if (m_trackData.size() <= m_railcomDetectionPort)
+        {
+            m_railcomDetectionPort = 0;
+        }
+
+        // after DMA was executed, configure next channel already to save time
+        setChannel(m_trackData[m_railcomDetectionPort].pin);                                                // 4us
+        HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferRailcom.begin(), m_adcDmaBufferRailcom.size()); // 26 us
+    }
+}
+
+void RailcomDecoder::callbackLocoAddrReceived(uint16_t addr)
+{
+
+    m_lastRailcomAddress = addr;
+    m_locoAddrReceived = true;
+}
+
+void RailcomDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc) 
+{
+        if ((Detection::Railcom == m_detectionConfig) || (Detection::CurrentSense == m_detectionConfig))
+    {
+        if (m_measurementCurrentSenseTriggered)
+        {
+            m_measurementCurrentSenseRunning = false;
+            m_measurementCurrentSenseProcessed = false;
+        }
+        if (m_measurementRailcomTriggered)
+        {
+            m_measurementRailcomRunning = false;
+            m_measurementRailcomProcessed = false;
+        }
+    }
+}
+
+bool RailcomDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type)
+{
+    bool result{false};
+    if ((accessoryId == m_modulId) || ((accessoryId & 0xF000) == modulNidMin))
+    {
+        if (port < m_trackData.size())
+        {
+            if (0x11 == type)
+            {
+                if (m_debug)
+                    ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
+                result = sendAccessoryDataAck(m_modulId, port, type, (m_railcomData[port].railcomAddr[0].direction << 14) | m_railcomData[port].railcomAddr[0].address, (m_railcomData[port].railcomAddr[1].direction << 14) | m_railcomData[port].railcomAddr[1].address);
+            }
+            else if (0x12 == type)
+            {
+                if (m_debug)
+                    ZCanInterfaceObserver::m_printFunc("onAccessoryData\n");
+                result = sendAccessoryDataAck(m_modulId, port, type, (m_railcomData[port].railcomAddr[2].direction << 14) | m_railcomData[port].railcomAddr[2].address, (m_railcomData[port].railcomAddr[3].direction << 14) | m_railcomData[port].railcomAddr[3].address);
+            }
+        }
+    }
+    return result;
+}
+
 // analyze incoming bit stream for railcom data and act accordingly
-void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t length, uint16_t voltageOffset, uint16_t trackSetVoltage)
+void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t length, uint16_t voltageOffset, uint16_t trackSetVoltage)
 {
     RailcomChannelData channel1;
     RailcomChannelData channel2;
@@ -179,7 +368,7 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
                 }
                 else if (firstByte < 0x40)
                 {
-                    uint8_t railcomId{(channel2.bytes[i - 1].data >> 2u) & static_cast<uint8_t>(0xFu)};
+                    uint8_t railcomId{static_cast<uint8_t>((channel2.bytes[i - 1].data >> 2u) & 0xFu)};
                     switch (railcomId)
                     {
                     case 0:
@@ -217,7 +406,7 @@ void Railcom::handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t leng
 }
 
 // retrive parameters of next byte in bit stream
-bool Railcom::getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex,
+bool RailcomDecoder::getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex,
                                         size_t *findStartIndex, size_t *findEndIndex)
 {
     bool result{false};
@@ -241,7 +430,7 @@ bool Railcom::getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t s
     return result;
 }
 
-void Railcom::handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length, RailcomChannelData &channel1, RailcomChannelData &channel2, uint16_t voltageOffset, uint16_t trackSetVoltage)
+void RailcomDecoder::handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length, RailcomChannelData &channel1, RailcomChannelData &channel2, uint16_t voltageOffset, uint16_t trackSetVoltage)
 {
     std::array<bool, 512> bitStreamDataBuffer;
 
@@ -270,7 +459,7 @@ void Railcom::handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length
         size_t endIndex{0};
         uint8_t numberOfBytes{0};
 
-        while (Railcom::getStartAndStopByteOfUart(bitStreamIN1samplePer1us, startOfSearch, endOfSearch, &startIndex, &endIndex))
+        while (RailcomDecoder::getStartAndStopByteOfUart(bitStreamIN1samplePer1us, startOfSearch, endOfSearch, &startIndex, &endIndex))
         {
             // found
             uint8_t dataByte{0};
@@ -332,7 +521,7 @@ void Railcom::handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length
     analyzeStream(channel2, startChannel2, length - 1);
 }
 
-void Railcom::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel channel, std::array<uint16_t, 4> &railcomData)
+void RailcomDecoder::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel channel, std::array<uint16_t, 4> &railcomData)
 {
     if ((0 != locoAddr) && (255 != locoAddr))
     {
@@ -385,7 +574,7 @@ void Railcom::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel
 }
 
 // check if any data change needs to be reported
-void Railcom::checkRailcomDataChange(RailcomAddr &data)
+void RailcomDecoder::checkRailcomDataChange(RailcomAddr &data)
 {
     uint32_t currentTimeINms = millis();
     if (!data.changeReported)
@@ -394,12 +583,21 @@ void Railcom::checkRailcomDataChange(RailcomAddr &data)
         if ((data.lastChangeTimeINms + m_railcomDataChangeCycleINms) < currentTimeINms)
         {
             data.changeReported = true;
-            callbackRailcomLocoAppeared();
+            notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
         }
     }
 }
 
-uint8_t Railcom::encode4to8[] = {
+bool RailcomDecoder::notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr)
+{
+    bool result = sendAccessoryDataEvt(m_modulId, port, 0x11,
+                                       (railcomAddr[0].direction << 14) | railcomAddr[0].address, (railcomAddr[1].direction << 14) | railcomAddr[1].address);
+    result &= sendAccessoryDataEvt(m_modulId, port, 0x12,
+                                   (railcomAddr[2].direction << 14) | railcomAddr[2].address, (railcomAddr[3].direction << 14) | railcomAddr[3].address);
+    return result;
+}
+
+uint8_t RailcomDecoder::encode4to8[] = {
     0b10101100,
     0b10101010,
     0b10101001,
@@ -477,7 +675,7 @@ uint8_t Railcom::encode4to8[] = {
 // NACK 0x40
 // ACK 0x41
 // Busy 0x42
-uint8_t Railcom::encode8to4[] = {
+uint8_t RailcomDecoder::encode8to4[] = {
     0xFF, // invalid 0b00000000
     0xFF, // invalid 0b00000001
     0xFF, // invalid 0b00000010

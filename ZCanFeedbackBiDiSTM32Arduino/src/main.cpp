@@ -17,7 +17,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "Arduino.h"
 #include "ZCan/CanInterfaceStm32.h"
-#include "FeedbackDecoder.h"
+#include "FeedbackDecoder/FeedbackDecoder.h"
+#include "FeedbackDecoder/RailcomDecoder.h"
 #include "FunctionDecoder.h"
 #include "StatusLed.h"
 #include "Helper/xprintf.h"
@@ -58,12 +59,11 @@ StatusLed<2> statusLed(statusClkPin, statusDataPin, statusTriggerOutputPin, stat
 // pins for feedback decoder 1
 std::array<int, 8> trackPin1{PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7};
 
-FeedbackDecoder::Detection detectionMode1{FeedbackDecoder::Detection::Railcom};
 int configRailcomPin{PB12};
 int configIdPin1{PB13};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
-FeedbackDecoder feedbackDecoder1(memoryData.modulConfig1, Flash::writeData, trackPin1, detectionMode1,
+RailcomDecoder railcomDecoder(memoryData.modulConfig1, Flash::writeData, trackPin1,
                                  configRailcomPin, configIdPin1, statusLed.getStatusArray()[0], xprintf, true, false, true);
 
 std::array<int, 8> trackPin2{PB9, PB8, PB7, PB6, PB5, PB4, PB3, PA15};
@@ -72,9 +72,8 @@ int configIdPin2{PB14};
 #ifdef FUNCTIONDECODER
 FunctionDecoder<8> functionDecoder(memoryData.functionDecoderConfig, Flash::writeData, trackPin2, configIdPin2, xprintf, true);
 #else
-FeedbackDecoder::Detection detectionMode2{FeedbackDecoder::Detection::Digital};
 // I will need in the end two of those moduls to handle each of the 8 inputs
-FeedbackDecoder feedbackDecoder2(memoryData.modulConfig2, Flash::writeData, trackPin2, detectionMode2,
+FeedbackDecoder feedbackDecoder2(memoryData.modulConfig2, Flash::writeData, trackPin2,
                                  configRailcomPin, configIdPin2, statusLed.getStatusArray()[1], xprintf, true, false, false);
 #endif
 
@@ -88,7 +87,7 @@ int debugPin{PB15};
 // Called when buffer is completely filled
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-  feedbackDecoder1.callbackAdcReadFinished(hadc);
+  railcomDecoder.callbackAdcReadFinished(hadc);
 }
 
 NmraDcc dcc;
@@ -113,7 +112,7 @@ void setup()
 
   delay(10);
 
-  if (!feedbackDecoder1.setCanObserver(canInterface))
+  if (!railcomDecoder.setCanObserver(canInterface))
   {
     xprintf("ERROR: No can interface for decoder 1 defined\n");
   }
@@ -130,7 +129,7 @@ void setup()
   Flash::m_memoryDataSize = sizeof(MemoryData);
   Flash::readData();
 
-  feedbackDecoder1.begin();
+  railcomDecoder.begin();
 #ifdef FUNCTIONDECODER
   functionDecoder.begin();
 #else
@@ -147,7 +146,7 @@ void loop()
 {
   dcc.process();
   canInterface->cyclic();
-  feedbackDecoder1.cyclic();
+  railcomDecoder.cyclic();
 #ifdef FUNCTIONDECODER
   functionDecoder.cyclic();
 #else
@@ -164,13 +163,13 @@ void loop()
 
 void notifyDccDataReady(void)
 {
-  feedbackDecoder1.callbackDccReceived();
+  railcomDecoder.callbackDccReceived();
 }
 
 void notifyDccAccTurnoutOutput(uint16_t Addr, uint8_t Direction, uint8_t OutputPower)
 {
   // Serial.printf("notifyDccAccTurnoutOutput: %u\n", Addr);
-  feedbackDecoder1.callbackAccAddrReceived(Addr);
+  railcomDecoder.callbackAccAddrReceived(Addr);
 
 #ifdef FUNCTIONDECODER
   functionDecoder.notifyDccAccTurnoutOutput(Addr, Direction);
@@ -182,13 +181,13 @@ void notifyDccAccTurnoutOutput(uint16_t Addr, uint8_t Direction, uint8_t OutputP
 void notifyDccFunc(uint16_t Addr, DCC_ADDR_TYPE AddrType, FN_GROUP FuncGrp, uint8_t FuncState)
 {
   // Serial.printf("notifyDccFunc: %u\n", Addr);
-  feedbackDecoder1.callbackLocoAddrReceived(Addr);
+  railcomDecoder.callbackLocoAddrReceived(Addr);
 }
 
 void notifyDccSpeed(uint16_t Addr, DCC_ADDR_TYPE AddrType, uint8_t Speed, DCC_DIRECTION Dir, DCC_SPEED_STEPS SpeedSteps)
 {
   // Serial.printf("notifyDccSpeed: %u\n", Addr);
-    feedbackDecoder1.callbackLocoAddrReceived(Addr);
+    railcomDecoder.callbackLocoAddrReceived(Addr);
 }
 
 uint8_t notifyCVValid(uint16_t CV, uint8_t Writable)

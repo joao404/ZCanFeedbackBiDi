@@ -1,7 +1,7 @@
 /*********************************************************************
- * Railcom
+ * Railcom Decoder
  *
- * Copyright (C) 2022 Marcel Maage
+ * Copyright (C) 2023 Marcel Maage
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,8 +17,9 @@
 #pragma once
 
 #include "Arduino.h"
+#include "FeedbackDecoder/FeedbackDecoder.h"
 
-class Railcom
+class CurrentDecoder : public FeedbackDecoder
 {
 public:
     typedef struct
@@ -69,25 +70,24 @@ public:
                          };
     } RailcomChannelData;
 
-    Railcom(void (*printFunc)(const char *, ...) = nullptr, bool debug = false);
-    virtual ~Railcom();
+    CurrentDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
+                    int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...) = nullptr,
+                    bool debug = false, bool zcanDebug = false, bool railcomDebug = false);
+    virtual ~CurrentDecoder() override;
+
+    virtual void cyclic() override;
+
+    virtual void callbackDccReceived() override;
+
+    virtual void callbackLocoAddrReceived(uint16_t addr) override;
+
+    virtual void callbackAdcReadFinished(ADC_HandleTypeDef *hadc) override;
 
 protected:
-    void cyclic();
-
-    void handleRailcomData(uint16_t dmaBufferIN1samplePer1us[], size_t length, uint16_t voltageOffset, uint16_t trackSetVoltage);
-
-    bool getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex, size_t *findStartIndex, size_t *findEndIndex);
-
-    void handleBitStream(uint16_t dmaBufferIN1samplePer1us[], size_t length, RailcomChannelData &channel1, RailcomChannelData &channel2, uint16_t voltageOffset, uint16_t trackSetVoltage);
-
-    void handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel channel, std::array<uint16_t, 4> &railcomData);
-
-    virtual void callbackRailcomLocoAppeared(void) = 0;
-
-    virtual void callbackRailcomLocoLeft(void) = 0;
-
-    void checkRailcomDataChange(RailcomAddr &data);
+    // configure input pins for feedback function
+    void configInputs() override;
+    // reaction on Accessory Data message
+    virtual bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type) override;
 
     bool m_debug;
 

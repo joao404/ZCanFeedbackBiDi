@@ -18,9 +18,8 @@
 #include "ZCan/ZCanInterfaceObserver.h"
 #include <array>
 #include "Stm32f1/adc.h"
-#include "Railcom.h"
 
-class FeedbackDecoder : public ZCanInterfaceObserver, public Railcom
+class FeedbackDecoder : public ZCanInterfaceObserver
 {
 public:
     // every variable must have size of 16 bits to fit memory layout
@@ -48,24 +47,26 @@ public:
         Railcom
     };
 
-    FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin, Detection detectionConfig,
+    FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
                     int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...) = nullptr,
-                    bool debug = false, bool zcanDebug = false, bool railcomDebug = false);
+                    bool debug = false, bool zcanDebug = false);
     virtual ~FeedbackDecoder();
 
-    void begin();
+    virtual void begin();
 
-    void cyclic();
+    virtual void cyclic();
 
-    void callbackDccReceived();
+    virtual void callbackDccReceived();
 
-    void callbackAccAddrReceived(uint16_t addr);
+    virtual void callbackAccAddrReceived(uint16_t addr);
 
-    void callbackLocoAddrReceived(uint16_t addr);
+    virtual void callbackLocoAddrReceived(uint16_t addr);
 
-    void callbackAdcReadFinished(ADC_HandleTypeDef *hadc);
+    virtual void callbackAdcReadFinished(ADC_HandleTypeDef *hadc);
 
 protected:
+    // configure input pins for feedback function
+    virtual void configInputs();
     // reaction on a ZCan message with identical network id
     virtual void onIdenticalNetworkId() override;
     // reaction on Accessory Data message
@@ -90,6 +91,12 @@ protected:
     virtual bool onPing(uint16_t nid, uint32_t masterUid, uint16_t type, uint16_t sessionId) override;
 
     bool sendMessage(ZCanMessage &message) override;
+
+    ModulConfig &m_modulConfig;
+
+    uint32_t m_firmwareVersion{0x05010014}; // 5.1.20
+    uint32_t m_buildDate{0x07E60917};       // 23.09.2022
+    uint32_t m_hardwareVersion{0x05010001}; // 5.1.1
 
     bool m_debug;
 
@@ -154,21 +161,7 @@ protected:
 
     bool m_measurementRailcomProcessed{true};
 
-    // adress is 0x8000 up tp 0xC000
-    bool notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr);
-
     bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
 
     void portStatusCheck(bool state, std::function<void(void)> callbackTrackSet, std::function<void(void)> callbackTrackReset);
-
-    void callbackRailcomLocoAppeared(void) override;
-
-    void callbackRailcomLocoLeft(void) override;
-
-private:
-    ModulConfig &m_modulConfig;
-
-    uint32_t m_firmwareVersion{0x05010014}; // 5.1.20
-    uint32_t m_buildDate{0x07E60917};       // 23.09.2022
-    uint32_t m_hardwareVersion{0x05010001}; // 5.1.1
 };
