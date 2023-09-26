@@ -21,7 +21,7 @@ RailcomDecoder::RailcomDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(voi
                                int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),
                                bool debug, bool zcanDebug, bool railcomDebug)
     : FeedbackDecoder(modulConfig, saveDataFkt, trackPin, configAnalogOffsetPin, configIdPin, statusLed, printFunc, debug, zcanDebug),
-m_railcomDebug(railcomDebug)
+      m_railcomDebug(railcomDebug)
 {
 }
 RailcomDecoder::~RailcomDecoder()
@@ -62,9 +62,8 @@ void RailcomDecoder::configInputs()
     setChannel(m_trackData[m_railcomDetectionPort].pin); // 4us
 }
 
-void RailcomDecoder::cyclic()
+void RailcomDecoder::cyclicPortCheck()
 {
-    FeedbackDecoder::cyclic();
 
     if (m_measurementCurrentSenseTriggered && !m_measurementCurrentSenseRunning && !m_measurementCurrentSenseProcessed)
     {
@@ -82,34 +81,7 @@ void RailcomDecoder::cyclic()
         }
         m_currentSenseSum /= m_adcDmaBufferCurrentSense.size();
         bool state = m_currentSenseSum > m_trackSetVoltage;
-        auto trackSetFkt = [this]()
-        {
-            notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
-        };
-
-        auto trackResetFkt = [this]()
-        {
-            if (Detection::Railcom == m_detectionConfig)
-            {
-                // TODO
-
-                for (auto &railcomAddr : m_railcomData[m_detectionPort].railcomAddr)
-                {
-                    if (0 != railcomAddr.address)
-                    {
-                        if (m_railcomDebug)
-                        {
-                            ZCanInterfaceObserver::m_printFunc("Loco left:0x%X\n", railcomAddr.address);
-                        }
-                    }
-                    railcomAddr.address = 0;
-                    railcomAddr.direction = 0;
-                    railcomAddr.lastChangeTimeINms = millis();
-                }
-                notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
-            }
-        };
-        portStatusCheck(state, trackSetFkt, trackResetFkt);
+        portStatusCheck(state);
         m_detectionPort++;
         if (m_trackData.size() > m_detectionPort)
         {
@@ -175,6 +147,29 @@ void RailcomDecoder::cyclic()
     }
 }
 
+void RailcomDecoder::onBlockOccupied()
+{
+    notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
+}
+
+void RailcomDecoder::onBlockEmpty()
+{
+    for (auto &railcomAddr : m_railcomData[m_detectionPort].railcomAddr)
+    {
+        if (0 != railcomAddr.address)
+        {
+            if (m_railcomDebug)
+            {
+                ZCanInterfaceObserver::m_printFunc("Loco left:0x%X\n", railcomAddr.address);
+            }
+        }
+        railcomAddr.address = 0;
+        railcomAddr.direction = 0;
+        railcomAddr.lastChangeTimeINms = millis();
+    }
+    notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
+}
+
 void RailcomDecoder::callbackDccReceived()
 {
     if (!m_measurementRailcomRunning)
@@ -210,20 +205,17 @@ void RailcomDecoder::callbackLocoAddrReceived(uint16_t addr)
     m_locoAddrReceived = true;
 }
 
-void RailcomDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc) 
+void RailcomDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
 {
-        if ((Detection::Railcom == m_detectionConfig) || (Detection::CurrentSense == m_detectionConfig))
+    if (m_measurementCurrentSenseTriggered)
     {
-        if (m_measurementCurrentSenseTriggered)
-        {
-            m_measurementCurrentSenseRunning = false;
-            m_measurementCurrentSenseProcessed = false;
-        }
-        if (m_measurementRailcomTriggered)
-        {
-            m_measurementRailcomRunning = false;
-            m_measurementRailcomProcessed = false;
-        }
+        m_measurementCurrentSenseRunning = false;
+        m_measurementCurrentSenseProcessed = false;
+    }
+    if (m_measurementRailcomTriggered)
+    {
+        m_measurementRailcomRunning = false;
+        m_measurementRailcomProcessed = false;
     }
 }
 
@@ -279,38 +271,38 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                     // check if start index of first byte is near second byte start index
                     uint8_t railcomId = (highByte >> 2) & 0xF;
                     uint16_t railcomValue = ((highByte & 0x03) << 6) | (lowByte & 0x3F);
-                    if((1!= railcomId) &&(2!=railcomId) )
+                    if ((1 != railcomId) && (2 != railcomId))
                     {
                         continue;
                     }
                     uint16_t locoAddr{0};
-                    if(0x01 == railcomId)
+                    if (0x01 == railcomId)
                     {
-                        if(m_railcomData[m_railcomDetectionPort].lastChannelId[0] != railcomId)
+                        if (m_railcomData[m_railcomDetectionPort].lastChannelId[0] != railcomId)
                         {
                             m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 1;
-                            if(m_railcomData[m_railcomDetectionPort].lastChannelData[0] != railcomValue)
+                            if (m_railcomData[m_railcomDetectionPort].lastChannelData[0] != railcomValue)
                             {
-                                 m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 0;
+                                m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 0;
                                 m_railcomData[m_railcomDetectionPort].lastChannelData[1] = 0;
                             }
                             m_railcomData[m_railcomDetectionPort].lastChannelData[0] = railcomValue;
                         }
                     }
-                    else if(0x02 == railcomId)
+                    else if (0x02 == railcomId)
                     {
-                        if(m_railcomData[m_railcomDetectionPort].lastChannelId[1] != railcomId)
+                        if (m_railcomData[m_railcomDetectionPort].lastChannelId[1] != railcomId)
                         {
                             m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 1;
-                            if(m_railcomData[m_railcomDetectionPort].lastChannelData[1] != railcomValue)
+                            if (m_railcomData[m_railcomDetectionPort].lastChannelData[1] != railcomValue)
                             {
-                                 m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 0;
-                            m_railcomData[m_railcomDetectionPort].lastChannelData[0] = 0;
+                                m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 0;
+                                m_railcomData[m_railcomDetectionPort].lastChannelData[0] = 0;
                             }
                             m_railcomData[m_railcomDetectionPort].lastChannelData[1] = railcomValue;
                         }
                     }
-                    if((1==m_railcomData[m_railcomDetectionPort].lastChannelId[0]) && (1==m_railcomData[m_railcomDetectionPort].lastChannelId[1]))
+                    if ((1 == m_railcomData[m_railcomDetectionPort].lastChannelId[0]) && (1 == m_railcomData[m_railcomDetectionPort].lastChannelId[1]))
                     {
                         locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].lastChannelData[1];
                     }
@@ -408,7 +400,7 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
 
 // retrive parameters of next byte in bit stream
 bool RailcomDecoder::getStartAndStopByteOfUart(bool *bitStreamIN1samplePer1us, size_t startIndex, size_t endIndex,
-                                        size_t *findStartIndex, size_t *findEndIndex)
+                                               size_t *findStartIndex, size_t *findEndIndex)
 {
     bool result{false};
     // search for first high level
@@ -558,7 +550,7 @@ void RailcomDecoder::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, 
                     if (m_railcomDebug)
                     {
                         m_printFunc("Loco appeared:0x%X D:0x%X at %d:%d\n", locoAddr, direction, m_railcomDetectionPort, channel);
-                        //m_printFunc("%x %x %x %x\n", railcomData[0], railcomData[1], railcomData[2], railcomData[3]);
+                        // m_printFunc("%x %x %x %x\n", railcomData[0], railcomData[1], railcomData[2], railcomData[3]);
                     }
                     data.changeReported = false;
                     checkRailcomDataChange(data);

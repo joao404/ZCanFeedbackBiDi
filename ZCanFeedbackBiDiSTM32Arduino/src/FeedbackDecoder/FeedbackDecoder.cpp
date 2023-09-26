@@ -114,11 +114,6 @@ void FeedbackDecoder::begin()
 
     ZCanInterfaceObserver::begin();
 
-    if (Detection::Railcom == m_detectionConfig)
-    {
-        ZCanInterfaceObserver::m_printFunc("Railcom active\n");
-    }
-
     configInputs();
 
     for (uint8_t port = 0; port < m_trackData.size(); ++port)
@@ -137,14 +132,14 @@ void FeedbackDecoder::begin()
 void FeedbackDecoder::configInputs()
 {
     for (uint8_t port = 0; port < m_trackData.size(); ++port)
-        {
-            pinMode(m_trackData[port].pin, INPUT_PULLUP);
-            m_trackData[port].state = !digitalRead(m_trackData[port].pin);
-            notifyBlockOccupied(port, 0x01, m_trackData[port].state);
-            m_trackData[port].lastChangeTimeINms = millis();
-            if (m_debug)
-                ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", port, m_trackData[port].state);
-        }
+    {
+        pinMode(m_trackData[port].pin, INPUT_PULLUP);
+        m_trackData[port].state = !digitalRead(m_trackData[port].pin);
+        notifyBlockOccupied(port, 0x01, m_trackData[port].state);
+        m_trackData[port].lastChangeTimeINms = millis();
+        if (m_debug)
+            ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", port, m_trackData[port].state);
+    }
 }
 
 void FeedbackDecoder::cyclic()
@@ -172,16 +167,17 @@ void FeedbackDecoder::cyclic()
         m_idPrgStartTimeINms = currentTimeINms;
     }
     ///////////////////////////////////////////////////////////////////////////
-    if (Detection::Digital == m_detectionConfig)
+    cyclicPortCheck();
+}
+
+void FeedbackDecoder::cyclicPortCheck()
+{
+    bool state = !digitalRead(m_trackData[m_detectionPort].pin);
+    portStatusCheck(state);
+    m_detectionPort++;
+    if (m_trackData.size() <= m_detectionPort)
     {
-        bool state = !digitalRead(m_trackData[m_detectionPort].pin);
-        portStatusCheck(
-            state, []() {}, []() {});
-        m_detectionPort++;
-        if (m_trackData.size() <= m_detectionPort)
-        {
-            m_detectionPort = 0;
-        }
+        m_detectionPort = 0;
     }
 }
 
@@ -215,7 +211,7 @@ bool FeedbackDecoder::notifyBlockOccupied(uint8_t port, uint8_t type, bool occup
     return sendAccessoryPort6Evt(m_modulId, port, type, value);
 }
 
-void FeedbackDecoder::portStatusCheck(bool state, std::function<void(void)> callbackTrackSet, std::function<void(void)> callbackTrackReset)
+void FeedbackDecoder::portStatusCheck(bool state)
 {
     uint32_t currentTimeINms = millis();
     if (state != m_trackData[m_detectionPort].state)
@@ -232,7 +228,7 @@ void FeedbackDecoder::portStatusCheck(bool state, std::function<void(void)> call
             {
                 m_trackData[m_detectionPort].changeReported = true;
                 notifyBlockOccupied(m_detectionPort, 0x01, state);
-                callbackTrackSet();
+                onBlockOccupied();
                 if (m_debug)
                     ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", m_detectionPort, state);
             }
@@ -243,12 +239,20 @@ void FeedbackDecoder::portStatusCheck(bool state, std::function<void(void)> call
             {
                 m_trackData[m_detectionPort].changeReported = true;
                 notifyBlockOccupied(m_detectionPort, 0x01, state);
-                callbackTrackReset();
+                onBlockEmpty();
                 if (m_debug)
                     ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", m_detectionPort, state);
             }
         }
     }
+}
+
+void FeedbackDecoder::onBlockOccupied()
+{
+}
+
+void FeedbackDecoder::onBlockEmpty()
+{
 }
 
 //---------------------------------------------------------------------------

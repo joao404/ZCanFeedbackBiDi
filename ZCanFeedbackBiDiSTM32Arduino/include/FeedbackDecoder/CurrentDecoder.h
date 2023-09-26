@@ -23,13 +23,10 @@
 class CurrentDecoder : public FeedbackDecoder
 {
 public:
-
     CurrentDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
-                    int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...) = nullptr,
-                    bool debug = false, bool zcanDebug = false, bool currentDebug = false);
+                   int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...) = nullptr,
+                   bool debug = false, bool zcanDebug = false, bool currentDebug = false);
     virtual ~CurrentDecoder() override;
-
-    virtual void cyclic() override;
 
     virtual void callbackDccReceived() override;
 
@@ -41,12 +38,14 @@ protected:
     // configure input pins for feedback function
     void configInputs() override;
 
+    void cyclicPortCheck() override;
+
     bool m_currentDebug;
 
     void (*m_printFunc)(const char *, ...);
 
     uint16_t *m_dmaBufferIN1samplePer1us;
-    
+
     std::array<uint16_t, 128> m_adcDmaBufferCurrentSense;
 
     bool m_measurementCurrentSenseTriggered{false};

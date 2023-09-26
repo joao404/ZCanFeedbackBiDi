@@ -76,8 +76,6 @@ public:
                     bool debug = false, bool zcanDebug = false, bool railcomDebug = false);
     virtual ~RailcomDecoder() override;
 
-    virtual void cyclic() override;
-
     virtual void callbackDccReceived() override;
 
     virtual void callbackLocoAddrReceived(uint16_t addr) override;
@@ -87,6 +85,12 @@ public:
 protected:
     // configure input pins for feedback function
     void configInputs() override;
+
+    void cyclicPortCheck() override;
+
+    void onBlockOccupied() override;
+
+    void onBlockEmpty() override;
     // reaction on Accessory Data message
     virtual bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type) override;
 

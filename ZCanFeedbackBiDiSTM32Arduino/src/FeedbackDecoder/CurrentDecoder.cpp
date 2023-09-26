@@ -21,7 +21,7 @@ CurrentDecoder::CurrentDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(voi
                                int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),
                                bool debug, bool zcanDebug, bool currentDebug)
     : FeedbackDecoder(modulConfig, saveDataFkt, trackPin, configAnalogOffsetPin, configIdPin, statusLed, printFunc, debug, zcanDebug),
-    m_currentDebug(currentDebug)
+      m_currentDebug(currentDebug)
 {
 }
 CurrentDecoder::~CurrentDecoder()
@@ -58,14 +58,12 @@ void CurrentDecoder::configInputs()
             m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
         }
     }
-    configContinuousDmaMode();                           // 6us
+    configContinuousDmaMode();                    // 6us
     setChannel(m_trackData[m_detectionPort].pin); // 4us
 }
 
-void CurrentDecoder::cyclic()
+void CurrentDecoder::cyclicPortCheck()
 {
-    FeedbackDecoder::cyclic();
-
     if (m_measurementCurrentSenseTriggered && !m_measurementCurrentSenseRunning && !m_measurementCurrentSenseProcessed)
     {
         uint16_t m_currentSenseSum{0};
@@ -82,15 +80,7 @@ void CurrentDecoder::cyclic()
         }
         m_currentSenseSum /= m_adcDmaBufferCurrentSense.size();
         bool state = m_currentSenseSum > m_trackSetVoltage;
-        auto trackSetFkt = [this]()
-        {
-        };
-
-        auto trackResetFkt = [this]()
-        {
-            
-        };
-        portStatusCheck(state, trackSetFkt, trackResetFkt);
+        portStatusCheck(state);
         m_detectionPort++;
         if (m_trackData.size() > m_detectionPort)
         {
@@ -129,7 +119,7 @@ void CurrentDecoder::callbackDccReceived()
         m_measurementRailcomTriggered = true;
         m_measurementRailcomRunning = true;
         m_detectionPort = 0;
-        setChannel(m_trackData[m_detectionPort].pin);                                              // 4us
+        setChannel(m_trackData[m_detectionPort].pin);                                                       // 4us
         HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferRailcom.begin(), m_adcDmaBufferRailcom.size()); // 26 us
     }
 }
@@ -138,16 +128,16 @@ void CurrentDecoder::callbackLocoAddrReceived(uint16_t addr)
 {
 }
 
-void CurrentDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc) 
+void CurrentDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
 {
-        if (m_measurementCurrentSenseTriggered)
-        {
-            m_measurementCurrentSenseRunning = false;
-            m_measurementCurrentSenseProcessed = false;
-        }
-        if (m_measurementRailcomTriggered)
-        {
-            m_measurementRailcomRunning = false;
-            m_measurementRailcomProcessed = false;
-        }
+    if (m_measurementCurrentSenseTriggered)
+    {
+        m_measurementCurrentSenseRunning = false;
+        m_measurementCurrentSenseProcessed = false;
+    }
+    if (m_measurementRailcomTriggered)
+    {
+        m_measurementRailcomRunning = false;
+        m_measurementRailcomProcessed = false;
+    }
 }

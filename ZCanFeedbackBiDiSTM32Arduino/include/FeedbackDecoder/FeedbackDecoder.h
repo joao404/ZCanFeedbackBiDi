@@ -40,13 +40,6 @@ public:
         std::array<uint16_t, 8> voltageOffset;
     } ModulConfig;
 
-    enum class Detection : uint8_t
-    {
-        Digital = 0,
-        CurrentSense,
-        Railcom
-    };
-
     FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
                     int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...) = nullptr,
                     bool debug = false, bool zcanDebug = false);
@@ -67,6 +60,9 @@ public:
 protected:
     // configure input pins for feedback function
     virtual void configInputs();
+    // check port status cyclic
+    // called by cyclic()
+    virtual void cyclicPortCheck();
     // reaction on a ZCan message with identical network id
     virtual void onIdenticalNetworkId() override;
     // reaction on Accessory Data message
@@ -92,6 +88,13 @@ protected:
 
     bool sendMessage(ZCanMessage &message) override;
 
+    bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
+
+    void portStatusCheck(bool state);
+
+    virtual void onBlockOccupied();
+    virtual void onBlockEmpty();
+
     ModulConfig &m_modulConfig;
 
     uint32_t m_firmwareVersion{0x05010014}; // 5.1.20
@@ -102,7 +105,6 @@ protected:
 
     bool (*m_saveDataFkt)(void);
 
-    Detection m_detectionConfig;
     // if this ping is set to low during startup, offset values for analog measurements are taken
     int m_configAnalogOffsetPin;
     // ping for configuration of modul adress
@@ -144,8 +146,4 @@ protected:
     uint16_t m_trackSetVoltage{0};
 
     uint8_t m_detectionPort{0};
-
-    bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
-
-    void portStatusCheck(bool state, std::function<void(void)> callbackTrackSet, std::function<void(void)> callbackTrackReset);
 };
