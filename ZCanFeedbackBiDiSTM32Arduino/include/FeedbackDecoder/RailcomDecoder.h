@@ -23,6 +23,18 @@
 class RailcomDecoder : public FeedbackDecoder
 {
 public:
+    RailcomDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
+                   int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...) = nullptr,
+                   bool debug = false, bool zcanDebug = false, bool railcomDebug = false);
+    virtual ~RailcomDecoder() override;
+
+    virtual void callbackDccReceived() override;
+
+    virtual void callbackLocoAddrReceived(uint16_t addr) override;
+
+    virtual void callbackAdcReadFinished(ADC_HandleTypeDef *hadc) override;
+
+protected:
     typedef struct
     {
         uint16_t address;
@@ -31,7 +43,7 @@ public:
         bool changeReported;
     } RailcomAddr;
 
-    typedef struct
+    typedef struct RailcomData
     {
         std::array<RailcomAddr, 4> railcomAddr;
         std::array<uint8_t, 2> lastChannelId;
@@ -45,7 +57,7 @@ public:
         eChannel2
     };
 
-    typedef struct tRailcomByte
+    typedef struct RailcomByte
     {
         uint8_t data;
         int8_t direction;
@@ -53,36 +65,36 @@ public:
         size_t endIndex;
         bool valid;
 
-        tRailcomByte() : data(0xFF),
-                         direction(0),
-                         startIndex(1),
-                         endIndex(0),
-                         valid(false){
+        RailcomByte() : data(0xFF),
+                        direction(0),
+                        startIndex(1),
+                        endIndex(0),
+                        valid(false){
 
-                         };
+                        };
     } RailcomByte;
 
-    typedef struct tRailcomChannelData
+    typedef struct RailcomChannelData
     {
         size_t size;
         std::array<RailcomByte, 8> bytes;
-        tRailcomChannelData() : size(0){
+        RailcomChannelData() : size(0){
 
-                         };
+                               };
     } RailcomChannelData;
 
-    RailcomDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
-                    int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...) = nullptr,
-                    bool debug = false, bool zcanDebug = false, bool railcomDebug = false);
-    virtual ~RailcomDecoder() override;
+    typedef struct measurementControl
+    {
+        bool triggered;
+        bool running;
+        bool processed;
+        measurementControl() : triggered(false),
+                               running(false),
+                               processed(true){
 
-    virtual void callbackDccReceived() override;
+                               };
+    } measurementControl;
 
-    virtual void callbackLocoAddrReceived(uint16_t addr) override;
-
-    virtual void callbackAdcReadFinished(ADC_HandleTypeDef *hadc) override;
-
-protected:
     // configure input pins for feedback function
     void configInputs() override;
 
@@ -104,28 +116,18 @@ protected:
 
     void checkRailcomDataChange(RailcomAddr &data);
 
-        // adress is 0x8000 up tp 0xC000
+    // adress is 0x8000 up tp 0xC000
     bool notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr);
 
-    bool m_railcomDebug;
-
-    void (*m_printFunc)(const char *, ...);
+    bool m_railcomDebug{false};
 
     std::array<uint16_t, 128> m_adcDmaBufferCurrentSense;
 
-    bool m_measurementCurrentSenseTriggered{false};
-
-    bool m_measurementCurrentSenseRunning{false};
-
-    bool m_measurementCurrentSenseProcessed{true};
+    measurementControl m_currentSenseControl;
 
     std::array<uint16_t, 512> m_adcDmaBufferRailcom;
 
-    bool m_measurementRailcomTriggered{false};
-
-    bool m_measurementRailcomRunning{false};
-
-    bool m_measurementRailcomProcessed{true};
+    measurementControl m_railcomSenseControl;
 
     uint16_t *m_dmaBufferIN1samplePer1us;
 
@@ -133,7 +135,7 @@ protected:
 
     bool m_locoAddrReceived{false};
 
-    uint32_t m_railcomDataTimeoutINms{1000};
+    uint32_t m_railcomDataTimeoutINms{2000};
 
     uint32_t m_railcomDataChangeCycleINms{100};
 

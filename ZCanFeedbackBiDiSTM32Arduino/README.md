@@ -11,4 +11,4 @@ Following functionality is supported:
 - optional function decoder which is able to be used as switch, blink, servo, pulse and fade
 
 WORK IN PROGRESS:
-- currently a synchronisation problem can occur, which results in ghost reports because second railcom byte is interpreted as first
+- improvement of channel data handling and timeouts needed

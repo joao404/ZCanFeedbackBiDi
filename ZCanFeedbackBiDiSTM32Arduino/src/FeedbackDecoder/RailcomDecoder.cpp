@@ -58,6 +58,8 @@ void RailcomDecoder::configInputs()
             m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
         }
     }
+    m_railcomDetectionPort = 0;
+    m_railcomDetectionMeasurement = 0;
     configContinuousDmaMode();                           // 6us
     setChannel(m_trackData[m_railcomDetectionPort].pin); // 4us
 }
@@ -65,7 +67,7 @@ void RailcomDecoder::configInputs()
 void RailcomDecoder::cyclicPortCheck()
 {
 
-    if (m_measurementCurrentSenseTriggered && !m_measurementCurrentSenseRunning && !m_measurementCurrentSenseProcessed)
+    if (m_currentSenseControl.triggered && !m_currentSenseControl.running && !m_currentSenseControl.processed)
     {
         uint16_t m_currentSenseSum{0};
         for (uint16_t &measurement : m_adcDmaBufferCurrentSense)
@@ -82,10 +84,11 @@ void RailcomDecoder::cyclicPortCheck()
         m_currentSenseSum /= m_adcDmaBufferCurrentSense.size();
         bool state = m_currentSenseSum > m_trackSetVoltage;
         portStatusCheck(state);
+        m_currentSenseControl.processed = true;
         m_detectionPort++;
         if (m_trackData.size() > m_detectionPort)
         {
-            m_measurementCurrentSenseRunning = true;
+            m_currentSenseControl.running = true;
             setChannel(m_trackData[m_detectionPort].pin);
             // start ADC conversion
             HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
@@ -93,31 +96,39 @@ void RailcomDecoder::cyclicPortCheck()
         else
         {
             // no more measurements
-            m_measurementCurrentSenseTriggered = false;
+            m_currentSenseControl.triggered = false;
         }
-        m_measurementCurrentSenseProcessed = true;
     }
     ///////////////////////////////////////////////////////////////////////////
     // process Railcom data from ADC
-    if (m_measurementRailcomTriggered && !m_measurementRailcomRunning)
+    if (m_railcomSenseControl.triggered && !m_railcomSenseControl.running && !m_railcomSenseControl.processed)
     {
-        if (!m_measurementRailcomProcessed)
+        // std::array<uint16_t, 512> dmaBuffer;
+        //  copy DMA buffer to make sure that data is not overwritten in case that we take to long to analyze
+        // dmaBuffer = m_adcDmaBuffer;
+        analyzeRailcomData((uint16_t *)m_adcDmaBufferRailcom.begin(), 400, m_trackData[m_railcomDetectionPort].voltageOffset, m_trackSetVoltage);
+
+        m_railcomSenseControl.processed = true;
+        m_railcomSenseControl.triggered = false;
+        m_locoAddrReceived = false;
+        // prepare already next measurement
+        m_railcomDetectionMeasurement++;
+        if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
         {
-            // std::array<uint16_t, 512> dmaBuffer;
-            //  copy DMA buffer to make sure that data is not overwritten in case that we take to long to analyze
-            // dmaBuffer = m_adcDmaBuffer;
-            analyzeRailcomData(m_adcDmaBufferRailcom.begin(), 400, m_trackData[m_railcomDetectionPort].voltageOffset, m_trackSetVoltage);
-            m_measurementRailcomProcessed = true;
-            m_measurementRailcomTriggered = false;
-            m_locoAddrReceived = false;
-            //  trigger measurement of current sense
-            m_detectionPort = 0;
-            setChannel(m_trackData[m_detectionPort].pin);
-            // start ADC conversion
-            HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
-            m_measurementCurrentSenseTriggered = true;
-            m_measurementCurrentSenseRunning = true;
+            m_railcomDetectionMeasurement = 0;
+            m_railcomDetectionPort++;
         }
+        if (m_trackData.size() <= m_railcomDetectionPort)
+        {
+            m_railcomDetectionPort = 0;
+        }
+        //  trigger measurement of current sense
+        m_detectionPort = 0;
+        setChannel(m_trackData[m_detectionPort].pin);
+        m_currentSenseControl.triggered = true;
+        m_currentSenseControl.running = true;
+        // start ADC conversion
+        HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
     }
 
     // check for address data which was not renewed
@@ -167,30 +178,19 @@ void RailcomDecoder::onBlockEmpty()
         railcomAddr.direction = 0;
         railcomAddr.lastChangeTimeINms = millis();
     }
+    m_railcomData[m_detectionPort].lastChannelId[0] = 0;
+    m_railcomData[m_detectionPort].lastChannelId[1] = 0;
+    m_railcomData[m_detectionPort].lastChannelData[0] = 0;
+    m_railcomData[m_detectionPort].lastChannelData[1] = 0;
     notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
 }
 
 void RailcomDecoder::callbackDccReceived()
 {
-    if (!m_measurementRailcomRunning)
+    if (!m_railcomSenseControl.triggered && !m_railcomSenseControl.running && m_railcomSenseControl.processed)
     {
-        m_measurementRailcomTriggered = true;
-        m_measurementRailcomRunning = true;
-        m_railcomDetectionMeasurement++;
-        // both ifs take 2us
-        if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
-        {
-            // m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 0;
-            // m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 0;
-            // m_railcomData[m_railcomDetectionPort].lastChannelData[0] = 0;
-            // m_railcomData[m_railcomDetectionPort].lastChannelData[1] = 0;
-            m_railcomDetectionMeasurement = 0;
-            m_railcomDetectionPort++;
-        }
-        if (m_trackData.size() <= m_railcomDetectionPort)
-        {
-            m_railcomDetectionPort = 0;
-        }
+        m_railcomSenseControl.triggered = true;
+        m_railcomSenseControl.running = true;
 
         // after DMA was executed, configure next channel already to save time
         setChannel(m_trackData[m_railcomDetectionPort].pin);                                                // 4us
@@ -207,15 +207,15 @@ void RailcomDecoder::callbackLocoAddrReceived(uint16_t addr)
 
 void RailcomDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
 {
-    if (m_measurementCurrentSenseTriggered)
+    if (m_currentSenseControl.triggered && m_currentSenseControl.running)
     {
-        m_measurementCurrentSenseRunning = false;
-        m_measurementCurrentSenseProcessed = false;
+        m_currentSenseControl.running = false;
+        m_currentSenseControl.processed = false;
     }
-    if (m_measurementRailcomTriggered)
+    else if (m_railcomSenseControl.triggered && m_railcomSenseControl.running)
     {
-        m_measurementRailcomRunning = false;
-        m_measurementRailcomProcessed = false;
+        m_railcomSenseControl.running = false;
+        m_railcomSenseControl.processed = false;
     }
 }
 
@@ -260,74 +260,78 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
     {
         // at least 2 bytes
         // run through analytics of every two bytes
-        for (size_t i = 1; i < channel1.size; i++)
+        size_t maxIndex{channel1.size - 1};
+        for (size_t i = 0; i < maxIndex; i++)
         {
-            uint8_t highByte{channel1.bytes[i - 1].data};
-            uint8_t lowByte{channel1.bytes[i].data};
+
+            uint8_t highByte{channel1.bytes[i].data};
+            uint8_t lowByte{channel1.bytes[i + 1].data};
             if ((highByte < 0x40) && (lowByte < 0x40))
             {
-                if ((channel1.bytes[i].startIndex - channel1.bytes[i - 1].endIndex) < 6) // one byte commes direct after another
+                if ((channel1.bytes[i + 1].startIndex - channel1.bytes[i].endIndex) < 6) // one byte commes direct after another
                 {
                     // check if start index of first byte is near second byte start index
                     uint8_t railcomId = (highByte >> 2) & 0xF;
                     uint16_t railcomValue = ((highByte & 0x03) << 6) | (lowByte & 0x3F);
-                    if ((1 != railcomId) && (2 != railcomId))
+                    if ((1 == railcomId) || (2 == railcomId))
                     {
-                        continue;
-                    }
-                    uint16_t locoAddr{0};
-                    if (0x01 == railcomId)
-                    {
-                        if (m_railcomData[m_railcomDetectionPort].lastChannelId[0] != railcomId)
+                        // ZCanInterfaceObserver::m_printFunc("S:%X %X\n", railcomId, railcomValue);
+                        // digitalWrite(PB15, HIGH);
+                        uint16_t locoAddr{0};
+                        if (0x01 == railcomId)
                         {
-                            m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 1;
-                            if (m_railcomData[m_railcomDetectionPort].lastChannelData[0] != railcomValue)
+                            if (m_railcomData[m_railcomDetectionPort].lastChannelId[0] != railcomId)
+                            {
+                                m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 1;
+                                m_railcomData[m_railcomDetectionPort].lastChannelData[0] = railcomValue;
+                            }
+                            else if (m_railcomData[m_railcomDetectionPort].lastChannelData[0] != railcomValue)
                             {
                                 m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 0;
                                 m_railcomData[m_railcomDetectionPort].lastChannelData[1] = 0;
                             }
-                            m_railcomData[m_railcomDetectionPort].lastChannelData[0] = railcomValue;
                         }
-                    }
-                    else if (0x02 == railcomId)
-                    {
-                        if (m_railcomData[m_railcomDetectionPort].lastChannelId[1] != railcomId)
+                        else if (0x02 == railcomId)
                         {
-                            m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 1;
-                            if (m_railcomData[m_railcomDetectionPort].lastChannelData[1] != railcomValue)
+                            if (m_railcomData[m_railcomDetectionPort].lastChannelId[1] != railcomId)
+                            {
+                                m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 2;
+                                m_railcomData[m_railcomDetectionPort].lastChannelData[1] = railcomValue;
+                            }
+                            else if (m_railcomData[m_railcomDetectionPort].lastChannelData[1] != railcomValue)
                             {
                                 m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 0;
                                 m_railcomData[m_railcomDetectionPort].lastChannelData[0] = 0;
                             }
-                            m_railcomData[m_railcomDetectionPort].lastChannelData[1] = railcomValue;
                         }
-                    }
-                    if ((1 == m_railcomData[m_railcomDetectionPort].lastChannelId[0]) && (1 == m_railcomData[m_railcomDetectionPort].lastChannelId[1]))
-                    {
-                        locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].lastChannelData[1];
-                    }
+                        if ((1 == m_railcomData[m_railcomDetectionPort].lastChannelId[0]) && (2 == m_railcomData[m_railcomDetectionPort].lastChannelId[1]))
+                        {
+                            locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].lastChannelData[1];
+                        }
 
-                    if ((4 == channel1.bytes[i - 1].direction) && (4 == channel1.bytes[i].direction))
-                    {
-                        m_channel1Direction = 0x10;
-                    }
-                    else if ((-4 == channel1.bytes[i - 1].direction) && (-4 == channel1.bytes[i].direction))
-                    {
-                        m_channel1Direction = 0x11;
-                    }
-                    std::array<uint16_t, 4> data = {m_railcomData[m_railcomDetectionPort].lastChannelId[0], m_railcomData[m_railcomDetectionPort].lastChannelData[0], m_railcomData[m_railcomDetectionPort].lastChannelId[1], m_railcomData[m_railcomDetectionPort].lastChannelData[1]};
-                    handleFoundLocoAddr(locoAddr, m_channel1Direction, Channel::eChannel1, data);
-                    // m_printFunc("L %X %X %X %X\n", railcomId, railcomValue, m_railcomData[m_railcomDetectionPort].lastChannelId, m_railcomData[m_railcomDetectionPort].lastChannelData);
+                        if ((4 == channel1.bytes[i].direction) && (4 == channel1.bytes[i + 1].direction))
+                        {
+                            m_channel1Direction = 0x10;
+                        }
+                        else if ((-4 == channel1.bytes[i].direction) && (-4 == channel1.bytes[i + 1].direction))
+                        {
+                            m_channel1Direction = 0x11;
+                        }
 
-                    // m_railcomData[m_railcomDetectionPort].lastChannelId = railcomId;
-                    // m_railcomData[m_railcomDetectionPort].lastChannelData = railcomValue;
-                    // dataReceivedChannel1 = true;
-                    break;
+                        std::array<uint16_t, 4> data = {m_railcomData[m_railcomDetectionPort].lastChannelId[0], m_railcomData[m_railcomDetectionPort].lastChannelData[0], m_railcomData[m_railcomDetectionPort].lastChannelId[1], m_railcomData[m_railcomDetectionPort].lastChannelData[1]};
+                        handleFoundLocoAddr(locoAddr, m_channel1Direction, Channel::eChannel1, data);
+
+                        // m_printFunc("L %X %X %X %X\n", railcomId, railcomValue, m_railcomData[m_railcomDetectionPort].lastChannelId, m_railcomData[m_railcomDetectionPort].lastChannelData);
+
+                        // m_railcomData[m_railcomDetectionPort].lastChannelId = railcomId;
+                        // m_railcomData[m_railcomDetectionPort].lastChannelData = railcomValue;
+                        // dataReceivedChannel1 = true;
+                        break;
+                    }
                 }
             }
         }
     }
-
     // if (!dataReceivedChannel1)
     // {
     //     m_railcomData[m_railcomDetectionPort].lastChannelId = 0xFF;
@@ -339,19 +343,20 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
         // channel 2
         if (channel2.size > 0)
         {
+            digitalWrite(PB15, HIGH);
             // at least 2 bytes
             // run through analytics of every two bytes
-            for (size_t i = 1; i < channel2.size; i++)
+            for (size_t i = 0; i < channel2.size; i++)
             {
-                uint8_t firstByte = channel2.bytes[i - 1].data;
+                uint8_t firstByte = channel2.bytes[i].data;
                 if ((0x40 == firstByte) || (0x41 == firstByte) || (0x42 == firstByte))
                 {
                     // NACK, ACK, BUSY
-                    if (4 == channel2.bytes[i - 1].direction)
+                    if (4 == channel2.bytes[i].direction)
                     {
                         m_channel2Direction = 0x10;
                     }
-                    if (-4 == channel2.bytes[i - 1].direction)
+                    if (-4 == channel2.bytes[i].direction)
                     {
                         m_channel2Direction = 0x11;
                     }
@@ -359,9 +364,9 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                     handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
                     break;
                 }
-                else if (firstByte < 0x40)
+                else if ((firstByte < 0x40) && ((channel2.size - i) > 1))
                 {
-                    uint8_t railcomId{static_cast<uint8_t>((channel2.bytes[i - 1].data >> 2u) & 0xFu)};
+                    uint8_t railcomId{static_cast<uint8_t>((channel2.bytes[i].data >> 2u) & 0xFu)};
                     switch (railcomId)
                     {
                     case 0:
@@ -369,17 +374,17 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                     case 7:
                     case 12:
 
-                        if ((channel2.bytes[i].startIndex - channel2.bytes[i - 1].endIndex) < 6) // one byte commes direct after another
+                        if ((channel2.bytes[i + 1].startIndex - channel2.bytes[i].endIndex) < 6) // one byte commes direct after another
                         {
-                            uint8_t highByte{channel2.bytes[i - 1].data};
-                            uint8_t lowByte{channel2.bytes[i].data};
+                            uint8_t highByte{channel2.bytes[i].data};
+                            uint8_t lowByte{channel2.bytes[i + 1].data};
                             uint8_t railcomId = (highByte >> 2) & 0xF;
 
-                            if (4 == channel2.bytes[i - 1].direction)
+                            if (4 == channel2.bytes[i].direction)
                             {
                                 m_channel2Direction = 0x10;
                             }
-                            if (-4 == channel2.bytes[i - 1].direction)
+                            if (-4 == channel2.bytes[i].direction)
                             {
                                 m_channel2Direction = 0x11;
                             }
