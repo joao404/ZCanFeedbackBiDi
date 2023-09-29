@@ -95,6 +95,14 @@ protected:
                                };
     } measurementControl;
 
+    virtual void configAdcSingleMode() = 0;
+
+    virtual void configAdcDmaMode() = 0;
+
+    virtual uint32_t singleAdcRead(int channel) = 0;
+
+    virtual void triggerDmaRead(int channel, uint32_t* data, uint32_t length) = 0;
+
     // configure input pins for feedback function
     void configInputs() override;
 

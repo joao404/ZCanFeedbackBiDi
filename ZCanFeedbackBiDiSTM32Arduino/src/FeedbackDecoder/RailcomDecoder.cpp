@@ -35,17 +35,11 @@ void RailcomDecoder::configInputs()
     if (!digitalRead(m_configAnalogOffsetPin))
     {
         ZCanInterfaceObserver::m_printFunc("Offset measuring\n");
-        configSingleMeasurementMode();
+        configAdcSingleMode();
         // read current values of adcs as default value
         for (uint8_t port = 0; port < m_trackData.size(); ++port)
         {
-            setChannel(m_trackData[port].pin);
-            // Start ADC Conversion
-            HAL_ADC_Start(&hadc1);
-            // Poll ADC1 Perihperal & TimeOut = 1mSec
-            HAL_ADC_PollForConversion(&hadc1, 1);
-            // Read The ADC Conversion Result & Map It To PWM DutyCycle
-            m_trackData[port].voltageOffset = HAL_ADC_GetValue(&hadc1);
+            m_trackData[port].voltageOffset = singleAdcRead(m_trackData[port].pin);
             m_modulConfig.voltageOffset[port] = m_trackData[port].voltageOffset;
             ZCanInterfaceObserver::m_printFunc("Offset measurement port %d: %d\n", port, m_modulConfig.voltageOffset[port]);
         }
@@ -60,8 +54,7 @@ void RailcomDecoder::configInputs()
     }
     m_railcomDetectionPort = 0;
     m_railcomDetectionMeasurement = 0;
-    configContinuousDmaMode();                           // 6us
-    setChannel(m_trackData[m_railcomDetectionPort].pin); // 4us
+    configAdcDmaMode();
 }
 
 void RailcomDecoder::cyclicPortCheck()
@@ -89,9 +82,7 @@ void RailcomDecoder::cyclicPortCheck()
         if (m_trackData.size() > m_detectionPort)
         {
             m_currentSenseControl.running = true;
-            setChannel(m_trackData[m_detectionPort].pin);
-            // start ADC conversion
-            HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
+            triggerDmaRead(m_trackData[m_detectionPort].pin, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size());
         }
         else
         {
@@ -124,11 +115,9 @@ void RailcomDecoder::cyclicPortCheck()
         }
         //  trigger measurement of current sense
         m_detectionPort = 0;
-        setChannel(m_trackData[m_detectionPort].pin);
         m_currentSenseControl.triggered = true;
         m_currentSenseControl.running = true;
-        // start ADC conversion
-        HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
+        triggerDmaRead(m_trackData[m_detectionPort].pin, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
     }
 
     // check for address data which was not renewed
@@ -193,8 +182,7 @@ void RailcomDecoder::callbackDccReceived()
         m_railcomSenseControl.running = true;
 
         // after DMA was executed, configure next channel already to save time
-        setChannel(m_trackData[m_railcomDetectionPort].pin);                                                // 4us
-        HAL_ADC_Start_DMA(&hadc1, (uint32_t *)m_adcDmaBufferRailcom.begin(), m_adcDmaBufferRailcom.size()); // 26 us
+        triggerDmaRead(m_trackData[m_railcomDetectionPort].pin, (uint32_t *)m_adcDmaBufferRailcom.begin(), m_adcDmaBufferRailcom.size()); // 26 us
     }
 }
 
@@ -275,8 +263,6 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                     uint16_t railcomValue = ((highByte & 0x03) << 6) | (lowByte & 0x3F);
                     if ((1 == railcomId) || (2 == railcomId))
                     {
-                        // ZCanInterfaceObserver::m_printFunc("S:%X %X\n", railcomId, railcomValue);
-                        // digitalWrite(PB15, HIGH);
                         uint16_t locoAddr{0};
                         if (0x01 == railcomId)
                         {
@@ -343,7 +329,6 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
         // channel 2
         if (channel2.size > 0)
         {
-            digitalWrite(PB15, HIGH);
             // at least 2 bytes
             // run through analytics of every two bytes
             for (size_t i = 0; i < channel2.size; i++)
@@ -362,6 +347,7 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                     }
                     std::array<uint16_t, 4> data = {1, 2, 3, 4};
                     handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
+                    // no relevant data afterwards
                     break;
                 }
                 else if ((firstByte < 0x40) && ((channel2.size - i) > 1))
