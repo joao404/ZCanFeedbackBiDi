@@ -42,8 +42,6 @@ protected:
 
     bool m_currentDebug;
 
-    void (*m_printFunc)(const char *, ...);
-
     uint16_t *m_dmaBufferIN1samplePer1us;
 
     std::array<uint16_t, 128> m_adcDmaBufferCurrentSense;

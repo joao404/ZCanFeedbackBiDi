@@ -23,6 +23,10 @@ ZCanInterface::ZCanInterface(void (*printFunc)(const char *, ...), bool debug)
     {
         m_printFunc = printFunc;
     }
+    else
+    {
+        m_debug = false;
+    }
     if (m_debug)
     {
         m_printFunc("Creating ZCan");

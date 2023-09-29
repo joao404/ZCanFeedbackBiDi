@@ -44,7 +44,7 @@ FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(v
                                  int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),
                                  bool debug, bool zcanDebug)
     : ZCanInterfaceObserver(printFunc, zcanDebug),
-      m_debug(debug),
+      m_debug((nullptr != m_printFunc) ? debug : 0),
       m_saveDataFkt(saveDataFkt),
       m_configAnalogOffsetPin(configAnalogOffsetPin),
       m_configIdPin(configIdPin),

@@ -21,7 +21,7 @@ RailcomDecoder::RailcomDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(voi
                                int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),
                                bool debug, bool zcanDebug, bool railcomDebug)
     : FeedbackDecoder(modulConfig, saveDataFkt, trackPin, configAnalogOffsetPin, configIdPin, statusLed, printFunc, debug, zcanDebug),
-      m_railcomDebug(railcomDebug)
+      m_railcomDebug((nullptr != m_printFunc) ? railcomDebug : 0)
 {
 }
 RailcomDecoder::~RailcomDecoder()
