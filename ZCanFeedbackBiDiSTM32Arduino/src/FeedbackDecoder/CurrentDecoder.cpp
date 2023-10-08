@@ -15,7 +15,6 @@
  */
 
 #include "FeedbackDecoder/CurrentDecoder.h"
-#include "Arduino.h"
 
 CurrentDecoder::CurrentDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
                                int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),

@@ -15,7 +15,6 @@
  */
 
 #include "FeedbackDecoder/RailcomDecoder.h"
-#include "Arduino.h"
 
 RailcomDecoder::RailcomDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
                                int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),
@@ -167,10 +166,10 @@ void RailcomDecoder::onBlockEmpty()
         railcomAddr.direction = 0;
         railcomAddr.lastChangeTimeINms = millis();
     }
-    m_railcomData[m_detectionPort].lastChannelId[0] = 0;
-    m_railcomData[m_detectionPort].lastChannelId[1] = 0;
-    m_railcomData[m_detectionPort].lastChannelData[0] = 0;
-    m_railcomData[m_detectionPort].lastChannelData[1] = 0;
+    m_railcomData[m_detectionPort].channel1Data[0].id = 0;
+    m_railcomData[m_detectionPort].channel1Data[1].id = 0;
+    m_railcomData[m_detectionPort].channel1Data[0].data[0] = 0;
+    m_railcomData[m_detectionPort].channel1Data[1].data[0] = 0;
     notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
 }
 
@@ -265,53 +264,53 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                 if ((channel1.bytes[i + 1].startIndex - channel1.bytes[i].endIndex) < 6) // one byte commes direct after another
                 {
                     // check if start index of first byte is near second byte start index
-                    uint8_t railcomId = (highByte >> 2) & 0xF;
-                    uint16_t railcomValue = ((highByte & 0x03) << 6) | (lowByte & 0x3F);
-                    if ((1 == railcomId) || (2 == railcomId))
+                    uint8_t railcomValue = ((highByte & 0x03) << 6) | (lowByte & 0x3F);
+                    RailcomPacket12Bit packet({highByte, lowByte});
+                    if ((1 == packet.id) || (2 == packet.id))
                     {
                         uint16_t locoAddr{0};
-                        if (0x01 == railcomId)
+                        if (0x01 == packet.id)
                         {
-                            if (m_railcomData[m_railcomDetectionPort].lastChannelId[0] != railcomId)
+                            if (m_railcomData[m_railcomDetectionPort].channel1Data[0].id != packet.id)
                             {
-                                m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 1;
-                                m_railcomData[m_railcomDetectionPort].lastChannelData[0] = railcomValue;
+                                m_railcomData[m_railcomDetectionPort].channel1Data[0].id = 1;
+                                m_railcomData[m_railcomDetectionPort].channel1Data[0].data[0] = railcomValue;
                             }
-                            else if (m_railcomData[m_railcomDetectionPort].lastChannelData[0] != railcomValue)
+                            else if (m_railcomData[m_railcomDetectionPort].channel1Data[0].data[0] != railcomValue)
                             {
-                                m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 0;
-                                m_railcomData[m_railcomDetectionPort].lastChannelData[1] = 0;
+                                m_railcomData[m_railcomDetectionPort].channel1Data[1].id = 0;
+                                m_railcomData[m_railcomDetectionPort].channel1Data[1].data[0] = 0;
                             }
                         }
-                        else if (0x02 == railcomId)
+                        else if (0x02 == packet.id)
                         {
-                            if (m_railcomData[m_railcomDetectionPort].lastChannelId[1] != railcomId)
+                            if (m_railcomData[m_railcomDetectionPort].channel1Data[1].id != packet.id)
                             {
-                                m_railcomData[m_railcomDetectionPort].lastChannelId[1] = 2;
-                                m_railcomData[m_railcomDetectionPort].lastChannelData[1] = railcomValue;
+                                m_railcomData[m_railcomDetectionPort].channel1Data[1].id = 2;
+                                m_railcomData[m_railcomDetectionPort].channel1Data[1].data[0] = railcomValue;
                             }
-                            else if (m_railcomData[m_railcomDetectionPort].lastChannelData[1] != railcomValue)
+                            else if (m_railcomData[m_railcomDetectionPort].channel1Data[1].data[0] != railcomValue)
                             {
-                                m_railcomData[m_railcomDetectionPort].lastChannelId[0] = 0;
-                                m_railcomData[m_railcomDetectionPort].lastChannelData[0] = 0;
+                                m_railcomData[m_railcomDetectionPort].channel1Data[0].id = 0;
+                                m_railcomData[m_railcomDetectionPort].channel1Data[0].data[0] = 0;
                             }
                         }
-                        if ((1 == m_railcomData[m_railcomDetectionPort].lastChannelId[0]) && (2 == m_railcomData[m_railcomDetectionPort].lastChannelId[1]))
+                        if ((1 == m_railcomData[m_railcomDetectionPort].channel1Data[0].id) && (2 == m_railcomData[m_railcomDetectionPort].channel1Data[1].id))
                         {
-                            if (0x00 == (m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0xB0))
+                            if (0x00 == (m_railcomData[m_railcomDetectionPort].channel1Data[0].data[0] & 0xB0))
                             {
                                 // Base address CV1
-                                locoAddr = m_railcomData[m_railcomDetectionPort].lastChannelData[1] & 0x7F;
+                                locoAddr = m_railcomData[m_railcomDetectionPort].channel1Data[1].data[0] & 0x7F;
                             }
-                            else if (0x60 == (m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0xFF))
+                            else if (0x60 == (m_railcomData[m_railcomDetectionPort].channel1Data[0].data[0] & 0xFF))
                             {
                                 // Multiple Traction address CV19
-                                locoAddr = m_railcomData[m_railcomDetectionPort].lastChannelData[1] & 0x7F;
+                                locoAddr = m_railcomData[m_railcomDetectionPort].channel1Data[1].data[0] & 0x7F;
                             }
-                            else if (0x80 == (m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0xB0))
+                            else if (0x80 == (m_railcomData[m_railcomDetectionPort].channel1Data[0].data[0] & 0xB0))
                             {
                                 // Extended address CV17 + CV18
-                                locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].lastChannelData[1];
+                                locoAddr = ((m_railcomData[m_railcomDetectionPort].channel1Data[0].data[0] & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].channel1Data[1].data[0];
                             }
                         }
 
@@ -324,7 +323,7 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                             m_channel1Direction = 0x11;
                         }
 
-                        std::array<uint16_t, 4> data = {m_railcomData[m_railcomDetectionPort].lastChannelId[0], m_railcomData[m_railcomDetectionPort].lastChannelData[0], m_railcomData[m_railcomDetectionPort].lastChannelId[1], m_railcomData[m_railcomDetectionPort].lastChannelData[1]};
+                        std::array<uint16_t, 4> data = {m_railcomData[m_railcomDetectionPort].channel1Data[0].id, m_railcomData[m_railcomDetectionPort].channel1Data[0].data[0], m_railcomData[m_railcomDetectionPort].channel1Data[1].id, m_railcomData[m_railcomDetectionPort].channel1Data[1].data[0]};
                         handleFoundLocoAddr(locoAddr, m_channel1Direction, Channel::eChannel1, data);
 
                         // m_printFunc("L %X %X %X %X\n", railcomId, railcomValue, m_railcomData[m_railcomDetectionPort].lastChannelId, m_railcomData[m_railcomDetectionPort].lastChannelData);

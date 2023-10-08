@@ -13,7 +13,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * LICENSE file for more details.
  */
-#include "Arduino.h"
+
 #include "FeedbackDecoder/RailcomDecoderStm32f1.h"
 
 RailcomDecoderStm32f1::RailcomDecoderStm32f1(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,

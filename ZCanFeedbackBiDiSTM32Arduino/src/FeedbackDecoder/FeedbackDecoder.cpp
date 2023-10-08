@@ -38,7 +38,6 @@
 #include "FeedbackDecoder/FeedbackDecoder.h"
 #include <algorithm>
 #include <cstring>
-#include "Arduino.h"
 
 FeedbackDecoder::FeedbackDecoder(ModulConfig &modulConfig, bool (*saveDataFkt)(void), std::array<int, 8> &trackPin,
                                  int configAnalogOffsetPin, int configIdPin, uint8_t &statusLed, void (*printFunc)(const char *, ...),

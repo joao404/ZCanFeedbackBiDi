@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include "Arduino.h"
 #include "FeedbackDecoder/FeedbackDecoder.h"
 #include <array>
+#include <cstdint>
 
 class CurrentDecoder : public FeedbackDecoder
 {
