@@ -65,7 +65,7 @@ int configIdPin1{PB13};
 
 // I will need in the end two of those moduls to handle each of the 8 inputs
 RailcomDecoderStm32f1 railcomDecoder(memoryData.modulConfig1, Flash::writeData, trackPin1,
-                                 configRailcomPin, configIdPin1, statusLed.getStatusArray()[0], xprintf, true, false, true);
+                                     configRailcomPin, configIdPin1, statusLed.getStatusArray()[0], xprintf, true, false, true);
 
 std::array<int, 8> trackPin2{PB9, PB8, PB7, PB6, PB5, PB4, PB3, PA15};
 
@@ -81,7 +81,6 @@ FeedbackDecoder feedbackDecoder2(memoryData.modulConfig2, Flash::writeData, trac
 int ledPin{PC13};
 uint32_t lastLedBlinkINms{0};
 uint32_t ledBlinkIntervalINms{1000};
-
 
 int debugPin{PB15};
 
@@ -167,6 +166,16 @@ void notifyDccDataReady(void)
   railcomDecoder.callbackDccReceived();
 }
 
+void notifyDccAccTurnoutBoard(uint16_t BoardAddr, uint8_t OutputPair, uint8_t Direction, uint8_t OutputPower)
+{
+  // Serial.printf("notifyDccAccTurnoutOutput: %u\n", Addr);
+  railcomDecoder.callbackAccAddrReceived(BoardAddr);
+
+#ifndef FUNCTIONDECODER
+  feedbackDecoder2.callbackAccAddrReceived(Addr);
+#endif
+}
+
 void notifyDccAccTurnoutOutput(uint16_t Addr, uint8_t Direction, uint8_t OutputPower)
 {
   // Serial.printf("notifyDccAccTurnoutOutput: %u\n", Addr);
@@ -188,7 +197,7 @@ void notifyDccFunc(uint16_t Addr, DCC_ADDR_TYPE AddrType, FN_GROUP FuncGrp, uint
 void notifyDccSpeed(uint16_t Addr, DCC_ADDR_TYPE AddrType, uint8_t Speed, DCC_DIRECTION Dir, DCC_SPEED_STEPS SpeedSteps)
 {
   // Serial.printf("notifyDccSpeed: %u\n", Addr);
-    railcomDecoder.callbackLocoAddrReceived(Addr);
+  railcomDecoder.callbackLocoAddrReceived(Addr);
 }
 
 uint8_t notifyCVValid(uint16_t CV, uint8_t Writable)

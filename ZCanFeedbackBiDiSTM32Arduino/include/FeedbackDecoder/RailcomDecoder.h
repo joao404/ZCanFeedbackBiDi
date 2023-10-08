@@ -30,6 +30,8 @@ public:
 
     virtual void callbackDccReceived() override;
 
+    virtual void callbackAccAddrReceived(uint16_t addr) override;
+
     virtual void callbackLocoAddrReceived(uint16_t addr) override;
 
     virtual void callbackAdcReadFinished(ADC_HandleTypeDef *hadc) override;
@@ -95,13 +97,72 @@ protected:
                                };
     } measurementControl;
 
+    enum class AddressType : uint8_t
+    {
+        eNone,
+        eLoco,
+        eAcc
+    };
+
+    typedef struct RailcomPacket12Bit
+    {
+        uint8_t id;
+        std::array<uint8_t, 1> data;
+        // index 0 is first received byte
+        RailcomPacket12Bit(std::array<uint8_t, 2> input) : id((input[0] >> 2) & 0xF),
+                                                           data{{((input[0] & 0x03) << 6) | (input[1] & 0x3F)}} {
+
+                                                           };
+    } RailcomPacket12Bit;
+
+    typedef struct RailcomPacket18Bit
+    {
+        uint8_t id;
+        std::array<uint8_t, 2> data;
+        // index 0 is first received byte
+        RailcomPacket18Bit(std::array<uint8_t, 3> input) : id((input[0] >> 2) & 0xF),
+                                                           data{{((input[1] & 0x03) << 6) | (input[2] & 0x3F), ((input[0] & 0x03) << 4) | ((input[1] & 0x3B) >> 2)}} {
+
+                                                           };
+    } RailcomPacket18Bit;
+
+    typedef struct RailcomPacket24Bit
+    {
+        uint8_t id;
+        std::array<uint8_t, 3> data;
+        // index 0 is first received byte
+        RailcomPacket24Bit(std::array<uint8_t, 4> input) : id((input[0] >> 2) & 0xF),
+                                                           data{{((input[2] & 0x03) << 6) | (input[3] & 0x3F), ((input[1] & 0x0F) << 4) | ((input[2] & 0x3B) >> 2), ((input[0] & 0x03) << 2) | ((input[1] & 0x30) >> 4)}} {
+
+                                                           };
+    } RailcomPacket24Bit;
+
+    typedef struct RailcomPacket36Bit
+    {
+        uint8_t id;
+        std::array<uint8_t, 4> data;
+        // index 0 is first received byte
+        RailcomPacket36Bit(std::array<uint8_t, 6> input) : id((input[0] >> 2) & 0xF),
+                                                           data{{((input[4] & 0x03) << 6) | (input[5] & 0x3F), ((input[3] & 0x0F) << 4) | ((input[4] & 0x3B) >> 2), ((input[2] & 0x3F) << 2) | ((input[3] & 0x30) >> 4), ((input[0] & 0x03) << 6) | (input[1] & 0x3F)}} {
+
+                                                           };
+    } RailcomPacket36Bit;
+
+    union railcomPacket
+    {
+        RailcomPacket12Bit packet12Bit;
+        RailcomPacket18Bit packet18Bit;
+        RailcomPacket24Bit packet24Bit;
+        RailcomPacket36Bit packet36Bit;
+    };
+
     virtual void configAdcSingleMode() = 0;
 
     virtual void configAdcDmaMode() = 0;
 
     virtual uint32_t singleAdcRead(int channel) = 0;
 
-    virtual void triggerDmaRead(int channel, uint32_t* data, uint32_t length) = 0;
+    virtual void triggerDmaRead(int channel, uint32_t *data, uint32_t length) = 0;
 
     // configure input pins for feedback function
     void configInputs() override;
@@ -124,7 +185,7 @@ protected:
 
     void checkRailcomDataChange(RailcomAddr &data);
 
-    // adress is 0x8000 up tp 0xC000
+    // address is 0x8000 up tp 0xC000
     bool notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr);
 
     bool m_railcomDebug{false};
@@ -141,7 +202,7 @@ protected:
 
     uint16_t m_lastRailcomAddress{0};
 
-    bool m_locoAddrReceived{false};
+    AddressType m_addrReceived{AddressType::eNone};
 
     uint32_t m_railcomDataTimeoutINms{2000};
 

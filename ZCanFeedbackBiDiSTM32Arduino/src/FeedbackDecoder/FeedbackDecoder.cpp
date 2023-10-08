@@ -82,7 +82,7 @@ void FeedbackDecoder::begin()
         {
             m_modulConfig.networkId = modulNidMin + std::max((uint32_t)1, timeINus);
         }
-        m_modulConfig.modulAdress = 0x00;
+        m_modulConfig.modulAddress = 0x00;
         // for (auto finding = m_modulConfig.trackConfig.begin(); finding != m_modulConfig.trackConfig.end(); ++finding)
         m_modulConfig.trackConfig.trackSetCurrentINmA = 10;
         m_modulConfig.trackConfig.trackFreeToSetTimeINms = 20;
@@ -93,7 +93,7 @@ void FeedbackDecoder::begin()
 
     // m_modulConfig.networkId = 0x9201;
     m_networkId = m_modulConfig.networkId;
-    m_modulId = m_modulConfig.modulAdress;
+    m_modulId = m_modulConfig.modulAddress;
     uint32_t day = BUILDTM_DAY;
     uint32_t month = BUILDTM_MONTH;
     uint32_t year = BUILDTM_YEAR;
@@ -190,7 +190,7 @@ void FeedbackDecoder::callbackAccAddrReceived(uint16_t addr)
     if (m_idPrgRunning)
     {
         m_modulId = addr;
-        m_modulConfig.modulAdress = m_modulId;
+        m_modulConfig.modulAddress = m_modulId;
         m_idPrgRunning = false;
         m_saveDataFkt();
     }
@@ -374,10 +374,10 @@ bool FeedbackDecoder::onCmdModulInfo(uint16_t id, uint16_t type, uint32_t info)
         switch (type)
         {
         case 20:
-            m_modulConfig.modulAdress = (((info >> 8) & 0xFF) << 8) | (info & 0xFF);
+            m_modulConfig.modulAddress = (((info >> 8) & 0xFF) << 8) | (info & 0xFF);
             if (m_saveDataFkt())
             {
-                m_modulId = m_modulConfig.modulAdress;
+                m_modulId = m_modulConfig.modulAddress;
             }
             sendModuleInfoAck(m_modulId, type, m_modulId);
             break;

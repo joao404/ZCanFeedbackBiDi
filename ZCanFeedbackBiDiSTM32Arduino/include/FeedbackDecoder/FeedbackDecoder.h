@@ -33,7 +33,7 @@ public:
     typedef struct
     {
         uint16_t networkId;
-        uint16_t modulAdress;
+        uint16_t modulAddress;
         uint16_t sendChannel2Data;
         // std::array<TrackConfig, 8> trackConfig;
         TrackConfig trackConfig;
@@ -107,7 +107,7 @@ protected:
 
     // if this ping is set to low during startup, offset values for analog measurements are taken
     int m_configAnalogOffsetPin;
-    // ping for configuration of modul adress
+    // ping for configuration of modul address
     int m_configIdPin;
 
     uint16_t m_modulId{0};

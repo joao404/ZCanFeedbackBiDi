@@ -101,7 +101,7 @@ void RailcomDecoder::cyclicPortCheck()
 
         m_railcomSenseControl.processed = true;
         m_railcomSenseControl.triggered = false;
-        m_locoAddrReceived = false;
+        m_addrReceived = AddressType::eNone;
         // prepare already next measurement
         m_railcomDetectionMeasurement++;
         if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
@@ -186,11 +186,17 @@ void RailcomDecoder::callbackDccReceived()
     }
 }
 
+void RailcomDecoder::callbackAccAddrReceived(uint16_t addr)
+{
+    m_lastRailcomAddress = addr;
+    m_addrReceived = AddressType::eAcc;
+    FeedbackDecoder::callbackAccAddrReceived(addr);
+}
+
 void RailcomDecoder::callbackLocoAddrReceived(uint16_t addr)
 {
-
     m_lastRailcomAddress = addr;
-    m_locoAddrReceived = true;
+    m_addrReceived = AddressType::eLoco;
 }
 
 void RailcomDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
@@ -292,7 +298,21 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                         }
                         if ((1 == m_railcomData[m_railcomDetectionPort].lastChannelId[0]) && (2 == m_railcomData[m_railcomDetectionPort].lastChannelId[1]))
                         {
-                            locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].lastChannelData[1];
+                            if (0x00 == (m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0xB0))
+                            {
+                                // Base address CV1
+                                locoAddr = m_railcomData[m_railcomDetectionPort].lastChannelData[1] & 0x7F;
+                            }
+                            else if (0x60 == (m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0xFF))
+                            {
+                                // Multiple Traction address CV19
+                                locoAddr = m_railcomData[m_railcomDetectionPort].lastChannelData[1] & 0x7F;
+                            }
+                            else if (0x80 == (m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0xB0))
+                            {
+                                // Extended address CV17 + CV18
+                                locoAddr = ((m_railcomData[m_railcomDetectionPort].lastChannelData[0] & 0x3F) << 8) | m_railcomData[m_railcomDetectionPort].lastChannelData[1];
+                            }
                         }
 
                         if ((4 == channel1.bytes[i].direction) && (4 == channel1.bytes[i + 1].direction))
@@ -324,13 +344,11 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
     //     m_railcomData[m_railcomDetectionPort].lastChannelData = 0xFF;
     // }
 
-    if (m_locoAddrReceived)
+    // channel 2
+    if (channel2.size > 0)
     {
-        // channel 2
-        if (channel2.size > 0)
+        if (AddressType::eLoco == m_addrReceived)
         {
-            // at least 2 bytes
-            // run through analytics of every two bytes
             for (size_t i = 0; i < channel2.size; i++)
             {
                 uint8_t firstByte = channel2.bytes[i].data;
@@ -385,6 +403,9 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                     }
                 }
             }
+        }
+        else if (AddressType::eAcc == m_addrReceived)
+        {
         }
     }
 }
