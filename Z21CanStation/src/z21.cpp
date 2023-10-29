@@ -16,9 +16,13 @@
 
 #include "z21.h"
 
-z21::z21(uint16_t hash, uint32_t serialNumber, HwType hwType, uint32_t swVersion, void (*printFunc)(const char *, ...), bool debugz21, bool debugZ21, bool debugZCan)
+z21::z21(ConfigDccStation& configDccStation, uint16_t hash, uint32_t serialNumber, HwType hwType, uint32_t swVersion, void (*printFunc)(const char *, ...), bool debugz21, bool debugZ21, bool debugZCan)
     : ZCanInterfaceObserver(printFunc, debugZCan),
       z21InterfaceObserver(hwType, swVersion, debugZ21),
+      m_dccPin(configDccStation.dccPin),
+      m_ndccPin(configDccStation.ndccPin),
+      m_shortPin(configDccStation.shortPin), 
+      m_shortCircuitThresholdINA(configDccStation.shortCircuitThresholdINA),
       m_serialNumber(serialNumber),
       m_debug(debugz21)
 {
@@ -94,6 +98,17 @@ void z21::cyclic()
     m_lastPingSendTimeINms = currentTimeINms;
   }
   m_dps.update();
+
+  // short circuit detection using ACS712 5A
+
+  float sensorValue {static_cast<float>(analogRead(m_shortPin))};
+  float currentINA = sensorValue * adcValuePerAmpere - zeroAmpere;
+   if (currentINA > m_shortCircuitThresholdINA) {  //Short Circuit!
+      if ((OFF != m_dps.getpower()) && (SHORT != m_dps.getpower())) {
+        m_dps.setpower(SHORT);
+        Serial.println("Short Circuit");
+      }
+  }
 }
 
 void z21::update(Observable &observable, void *data)

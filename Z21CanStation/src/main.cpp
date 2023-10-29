@@ -42,8 +42,8 @@ const uint16_t swVersion{0x0142};
 const int16_t z21Port{21105};
 
 std::shared_ptr<UdpInterfaceEsp32> udpInterface = std::make_shared<UdpInterfaceEsp32>(30, z21Port, false);
-
-z21 centralStation(hash, serialNumber, z21Interface::HwType::Z21_XL, swVersion, xprintf, true, false, false);
+z21::ConfigDccStation configDccStation{25, 26, 34, 2.0};//2 Ampere max current
+z21 centralStation(configDccStation, hash, serialNumber, z21Interface::HwType::Z21_XL, swVersion, xprintf, true, false, false);
 
 AsyncUDP udp;
 

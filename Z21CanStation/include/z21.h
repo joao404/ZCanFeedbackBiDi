@@ -22,6 +22,15 @@
 #include <DCCPacketScheduler.h>
 #include <list>
 
+
+constexpr float adcVoltage{3.3};
+constexpr float adcResolution{1024};
+constexpr float zeroVoltage{2.5};
+constexpr float voltagePerAmpere{0.185};
+constexpr float resistorDivider{2};
+constexpr float adcValuePerAmpere{adcVoltage / adcResolution / voltagePerAmpere / resistorDivider};
+constexpr float zeroAmpere{zeroVoltage / voltagePerAmpere / resistorDivider};
+
 class z21 : public virtual ZCanInterfaceObserver, public virtual z21InterfaceObserver
 {
 public:
@@ -32,8 +41,16 @@ public:
         uint8_t steps;
     };
 
+    struct ConfigDccStation
+    {
+        uint8_t dccPin;    //Pin for DCC sginal out
+        uint8_t ndccPin;
+        uint8_t shortPin;  //Pin to detect Short Circuit
+        float shortCircuitThresholdINA;
+    };
+
 public:
-    z21(uint16_t hash, uint32_t serialNumber, HwType hwType, uint32_t swVersion, void (*printFunc)(const char *, ...) = nullptr, bool debugz21 = false, bool debugZ21 = false, bool debugZCan = false);
+    z21(ConfigDccStation& configDccStation, uint16_t hash, uint32_t serialNumber, HwType hwType, uint32_t swVersion, void (*printFunc)(const char *, ...) = nullptr, bool debugz21 = false, bool debugZ21 = false, bool debugZCan = false);
     virtual ~z21();
     void begin();
 
@@ -57,9 +74,11 @@ private:
 
     uint8_t m_powerState{0};
 
-    uint8_t m_dccPin{25};    //Pin for DCC sginal out
-    uint8_t m_ndccPin {26};
-    uint8_t m_shortPin {34};  //Pin to detect Short Circuit
+    uint8_t m_dccPin;    //Pin for DCC sginal out
+    uint8_t m_ndccPin;
+    uint8_t m_shortPin;  //Pin to detect Short Circuit
+
+    float m_shortCircuitThresholdINA;
 
     // const uint32_t z21Uid{0xBADEAFFE};
 
