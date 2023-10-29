@@ -22,7 +22,7 @@ z21::z21(ConfigDccStation& configDccStation, uint16_t hash, uint32_t serialNumbe
       m_dccPin(configDccStation.dccPin),
       m_ndccPin(configDccStation.ndccPin),
       m_shortPin(configDccStation.shortPin), 
-      m_shortCircuitThresholdINA(configDccStation.shortCircuitThresholdINA),
+      m_shortCircuitThresholdINmA(configDccStation.shortCircuitThresholdINmA),
       m_serialNumber(serialNumber),
       m_debug(debugz21)
 {
@@ -102,8 +102,8 @@ void z21::cyclic()
   // short circuit detection using ACS712 5A
 
   float sensorValue {static_cast<float>(analogRead(m_shortPin))};
-  float currentINA = sensorValue * adcValuePerAmpere - zeroAmpere;
-   if (currentINA > m_shortCircuitThresholdINA) {  //Short Circuit!
+  m_currentINmA = static_cast<uint16_t>(sensorValue * adcValuePerAmpere - zeroAmpere);
+   if (m_currentINmA > m_shortCircuitThresholdINmA) {  //Short Circuit!
       if ((OFF != m_dps.getpower()) && (SHORT != m_dps.getpower())) {
         m_dps.setpower(SHORT);
         Serial.println("Short Circuit");
@@ -349,7 +349,7 @@ void z21::notifyz21InterfaceLocoSpeed(uint16_t Adr, uint8_t speed, uint8_t stepC
 // //--------------------------------------------------------------------------------------------
 void z21::notifyz21InterfacegetSystemInfo(uint8_t client)
 {
-  sendSystemInfo(client, 0, 50000, 77); // report System State to z21Interface clients
+  sendSystemInfo(client, m_currentINmA, 50000, 77); // report System State to z21Interface clients
 }
 
 void z21::handleGetLocoMode(uint16_t adr, uint8_t &mode)

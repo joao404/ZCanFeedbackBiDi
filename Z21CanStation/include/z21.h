@@ -28,8 +28,8 @@ constexpr float adcResolution{1024};
 constexpr float zeroVoltage{2.5};
 constexpr float voltagePerAmpere{0.185};
 constexpr float resistorDivider{2};
-constexpr float adcValuePerAmpere{adcVoltage / adcResolution / voltagePerAmpere / resistorDivider};
-constexpr float zeroAmpere{zeroVoltage / voltagePerAmpere / resistorDivider};
+constexpr float adcValuePerAmpere{adcVoltage / adcResolution / voltagePerAmpere / resistorDivider * 1000};
+constexpr float zeroAmpere{zeroVoltage / voltagePerAmpere / resistorDivider * 1000};
 
 class z21 : public virtual ZCanInterfaceObserver, public virtual z21InterfaceObserver
 {
@@ -46,7 +46,7 @@ public:
         uint8_t dccPin;    //Pin for DCC sginal out
         uint8_t ndccPin;
         uint8_t shortPin;  //Pin to detect Short Circuit
-        float shortCircuitThresholdINA;
+        uint16_t shortCircuitThresholdINmA;
     };
 
 public:
@@ -78,7 +78,9 @@ private:
     uint8_t m_ndccPin;
     uint8_t m_shortPin;  //Pin to detect Short Circuit
 
-    float m_shortCircuitThresholdINA;
+    uint16_t m_shortCircuitThresholdINmA;
+
+    uint16_t m_currentINmA{0};
 
     // const uint32_t z21Uid{0xBADEAFFE};
 
