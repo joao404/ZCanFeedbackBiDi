@@ -616,7 +616,7 @@
 
   (footprint "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Horizontal" (layer "F.Cu")
     (tedit 5AE5139B) (tstamp 19bf8d2b-fcfb-4d90-8edd-63f790470a47)
-    (at 140.890225 119.71)
+    (at 40.64 25.4 180)
     (descr "Resistor, Axial_DIN0204 series, Axial, Horizontal, pin pitch=5.08mm, 0.167W, length*diameter=3.6*1.6mm^2, http://cdn-reichelt.de/documents/datenblatt/B400/1_4W%23YAG.pdf")
     (tags "Resistor Axial_DIN0204 series Axial Horizontal pin pitch 5.08mm 0.167W length 3.6mm diameter 1.6mm")
     (property "Sheetfile" "FeedbackSchematic.kicad_sch")
@@ -647,9 +647,9 @@
     (fp_line (start 4.34 0.8) (end 4.34 -0.8) (layer "F.Fab") (width 0.1) (tstamp d627d0b9-b8c0-43e2-b1b2-17f18aa693a2))
     (fp_line (start 4.34 -0.8) (end 0.74 -0.8) (layer "F.Fab") (width 0.1) (tstamp e5b6d377-71cf-4e8e-a73d-c04607815ed3))
     (fp_line (start 0.74 0.8) (end 4.34 0.8) (layer "F.Fab") (width 0.1) (tstamp fed748fb-e1aa-483f-b1b5-141ad706b71a))
-    (pad "1" thru_hole circle (at 0 0) (size 1.4 1.4) (drill 0.7) (layers *.Cu *.Mask)
+    (pad "1" thru_hole circle (at 0 0 180) (size 1.4 1.4) (drill 0.7) (layers *.Cu *.Mask)
       (net 2 "Dcc2") (pintype "passive") (tstamp 6dc946dc-80a1-4c1c-9bef-fa29b4d8ebca))
-    (pad "2" thru_hole oval (at 5.08 0) (size 1.4 1.4) (drill 0.7) (layers *.Cu *.Mask)
+    (pad "2" thru_hole oval (at 5.08 0 180) (size 1.4 1.4) (drill 0.7) (layers *.Cu *.Mask)
       (net 7 "Net-(D1-Pad2)") (pintype "passive") (tstamp e9506f20-a1c7-4e55-82f0-41d72d2ee958))
     (model "${KICAD6_3DMODEL_DIR}/Resistor_THT.3dshapes/R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Horizontal.wrl"
       (offset (xyz 0 0 0))
@@ -660,7 +660,7 @@
 
   (footprint "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Horizontal" (layer "F.Cu")
     (tedit 5AE5139B) (tstamp 1b1bc770-c130-4175-88ba-0f26d02e4a4f)
-    (at 140.890225 122.86)
+    (at 63.5 27.94)
     (descr "Resistor, Axial_DIN0204 series, Axial, Horizontal, pin pitch=5.08mm, 0.167W, length*diameter=3.6*1.6mm^2, http://cdn-reichelt.de/documents/datenblatt/B400/1_4W%23YAG.pdf")
     (tags "Resistor Axial_DIN0204 series Axial Horizontal pin pitch 5.08mm 0.167W length 3.6mm diameter 1.6mm")
     (property "Sheetfile" "FeedbackSchematic.kicad_sch")
@@ -2070,7 +2070,7 @@
 
   (footprint "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P1.90mm_Vertical" (layer "F.Cu")
     (tedit 5AE5139B) (tstamp 668b1d18-a86a-4d67-8925-9812b9f05ab4)
-    (at 175.760225 99.3)
+    (at 177.8 109.22)
     (descr "Resistor, Axial_DIN0204 series, Axial, Vertical, pin pitch=1.9mm, 0.167W, length*diameter=3.6*1.6mm^2, http://cdn-reichelt.de/documents/datenblatt/B400/1_4W%23YAG.pdf")
     (tags "Resistor Axial_DIN0204 series Axial Vertical pin pitch 1.9mm 0.167W length 3.6mm diameter 1.6mm")
     (property "Sheetfile" "FeedbackSchematic.kicad_sch")
@@ -2197,7 +2197,7 @@
 
   (footprint "Diode_THT:D_DO-201AD_P15.24mm_Horizontal" (layer "F.Cu")
     (tedit 5AE50CD5) (tstamp 744e2af1-07a1-4d83-a5c4-dbeaf8371617)
-    (at 97.020225 92.51)
+    (at 57.919775 70.92 180)
     (descr "Diode, DO-201AD series, Axial, Horizontal, pin pitch=15.24mm, , length*diameter=9.5*5.2mm^2, , http://www.diodes.com/_files/packages/DO-201AD.pdf")
     (tags "Diode DO-201AD series Axial Horizontal pin pitch 15.24mm  length 9.5mm diameter 5.2mm")
     (property "Sheetfile" "FeedbackSchematic.kicad_sch")
@@ -2246,9 +2246,9 @@
     (fp_line (start 2.87 2.6) (end 12.37 2.6) (layer "F.Fab") (width 0.1) (tstamp ce451eab-afa2-48b8-a191-049bc62fcaae))
     (fp_line (start 12.37 2.6) (end 12.37 -2.6) (layer "F.Fab") (width 0.1) (tstamp ef27e7e1-1502-4520-b75c-895bb53dc936))
     (fp_line (start 4.295 -2.6) (end 4.295 2.6) (layer "F.Fab") (width 0.1) (tstamp f4e42162-fdf7-4cf7-96d0-f0c8104332d9))
-    (pad "1" thru_hole rect (at 0 0) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
+    (pad "1" thru_hole rect (at 0 0 180) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
       (net 7 "Net-(D1-Pad2)") (pinfunction "K") (pintype "passive") (tstamp 1906e1f5-b756-438a-93ac-b3a75220edea))
-    (pad "2" thru_hole oval (at 15.24 0) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
+    (pad "2" thru_hole oval (at 15.24 0 180) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
       (net 10 "Track3") (pinfunction "A") (pintype "passive") (tstamp b927d3ac-1d32-40b8-af77-ffad5c91589d))
     (model "${KICAD6_3DMODEL_DIR}/Diode_THT.3dshapes/D_DO-201AD_P15.24mm_Horizontal.wrl"
       (offset (xyz 0 0 0))
@@ -2444,7 +2444,7 @@
 
   (footprint "Diode_THT:D_DO-201AD_P15.24mm_Horizontal" (layer "F.Cu")
     (tedit 5AE50CD5) (tstamp 8232f19b-a9c5-48ab-b759-f0ab51fec138)
-    (at 97.020225 85.76)
+    (at 50.8 15.24 180)
     (descr "Diode, DO-201AD series, Axial, Horizontal, pin pitch=15.24mm, , length*diameter=9.5*5.2mm^2, , http://www.diodes.com/_files/packages/DO-201AD.pdf")
     (tags "Diode DO-201AD series Axial Horizontal pin pitch 15.24mm  length 9.5mm diameter 5.2mm")
     (property "Sheetfile" "FeedbackSchematic.kicad_sch")
@@ -2493,9 +2493,9 @@
     (fp_line (start 12.37 -2.6) (end 2.87 -2.6) (layer "F.Fab") (width 0.1) (tstamp e5af3a0a-15cc-4684-af56-e3b8b960bbdc))
     (fp_line (start 4.395 -2.6) (end 4.395 2.6) (layer "F.Fab") (width 0.1) (tstamp e9644cf7-7003-4350-8581-2cd4f94e228c))
     (fp_line (start 2.87 -2.6) (end 2.87 2.6) (layer "F.Fab") (width 0.1) (tstamp f7adb370-10ee-4c74-bd9d-dcd9dd63015a))
-    (pad "1" thru_hole rect (at 0 0) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
+    (pad "1" thru_hole rect (at 0 0 180) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
       (net 2 "Dcc2") (pinfunction "K") (pintype "passive") (tstamp a458eff1-c2aa-4ad5-a55e-2a8811af079e))
-    (pad "2" thru_hole oval (at 15.24 0) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
+    (pad "2" thru_hole oval (at 15.24 0 180) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
       (net 7 "Net-(D1-Pad2)") (pinfunction "A") (pintype "passive") (tstamp 80695240-dc7c-4fd0-914f-fc1cb7c82d09))
     (model "${KICAD6_3DMODEL_DIR}/Diode_THT.3dshapes/D_DO-201AD_P15.24mm_Horizontal.wrl"
       (offset (xyz 0 0 0))
@@ -2513,7 +2513,7 @@
     (property "Sheetname" "")
     (path "/8891b60d-5fbf-47df-baaf-03ef5e8c26cf")
     (attr through_hole)
-    (fp_text reference "R120" (at 2.54 -1.92) (layer "F.SilkS")
+    (fp_text reference "R120" (at -51.300225 -24.98) (layer "F.SilkS")
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 3105097a-eb03-4ecb-baf6-5e3145821353)
     )
@@ -3670,7 +3670,7 @@
 
   (footprint "Diode_THT:D_DO-201AD_P15.24mm_Horizontal" (layer "F.Cu")
     (tedit 5AE50CD5) (tstamp b2f409e5-58ef-427a-9629-2df752fbb71f)
-    (at 97.020225 99.26)
+    (at 43.18 76.2)
     (descr "Diode, DO-201AD series, Axial, Horizontal, pin pitch=15.24mm, , length*diameter=9.5*5.2mm^2, , http://www.diodes.com/_files/packages/DO-201AD.pdf")
     (tags "Diode DO-201AD series Axial Horizontal pin pitch 15.24mm  length 9.5mm diameter 5.2mm")
     (property "Sheetfile" "FeedbackSchematic.kicad_sch")
@@ -4380,7 +4380,7 @@
 
   (footprint "Diode_THT:D_DO-201AD_P15.24mm_Horizontal" (layer "F.Cu")
     (tedit 5AE50CD5) (tstamp c56fd691-6726-4ec6-be7f-bfe159d0fd43)
-    (at 43.18 27.94)
+    (at 38.1 35.56)
     (descr "Diode, DO-201AD series, Axial, Horizontal, pin pitch=15.24mm, , length*diameter=9.5*5.2mm^2, , http://www.diodes.com/_files/packages/DO-201AD.pdf")
     (tags "Diode DO-201AD series Axial Horizontal pin pitch 15.24mm  length 9.5mm diameter 5.2mm")
     (property "Sheetfile" "FeedbackSchematic.kicad_sch")
@@ -5133,7 +5133,7 @@
 
   (footprint "Diode_THT:D_DO-201AD_P15.24mm_Horizontal" (layer "F.Cu")
     (tedit 5AE50CD5) (tstamp e6cfdf65-405a-4d35-9385-c2ba235a0575)
-    (at 154.080225 63.36)
+    (at 35.56 20.32)
     (descr "Diode, DO-201AD series, Axial, Horizontal, pin pitch=15.24mm, , length*diameter=9.5*5.2mm^2, , http://www.diodes.com/_files/packages/DO-201AD.pdf")
     (tags "Diode DO-201AD series Axial Horizontal pin pitch 15.24mm  length 9.5mm diameter 5.2mm")
     (property "Sheetfile" "FeedbackSchematic.kicad_sch")
@@ -5195,7 +5195,7 @@
 
   (footprint "Diode_THT:D_DO-201AD_P15.24mm_Horizontal" (layer "F.Cu")
     (tedit 5AE50CD5) (tstamp e71d5716-c81a-4ee5-a88a-c9e84dd9ab50)
-    (at 97.020225 68.92)
+    (at 53.34 30.48 180)
     (descr "Diode, DO-201AD series, Axial, Horizontal, pin pitch=15.24mm, , length*diameter=9.5*5.2mm^2, , http://www.diodes.com/_files/packages/DO-201AD.pdf")
     (tags "Diode DO-201AD series Axial Horizontal pin pitch 15.24mm  length 9.5mm diameter 5.2mm")
     (property "Sheetfile" "FeedbackSchematic.kicad_sch")
@@ -5244,9 +5244,9 @@
     (fp_line (start 4.395 -2.6) (end 4.395 2.6) (layer "F.Fab") (width 0.1) (tstamp ac6dadd7-ffc2-485b-a0a2-7213a2f23672))
     (fp_line (start 2.87 2.6) (end 12.37 2.6) (layer "F.Fab") (width 0.1) (tstamp b343e580-6d8c-42f0-b612-f5007365d1d3))
     (fp_line (start 12.37 -2.6) (end 2.87 -2.6) (layer "F.Fab") (width 0.1) (tstamp d53cc581-6024-401b-bfac-aaeefd91905a))
-    (pad "1" thru_hole rect (at 0 0) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
+    (pad "1" thru_hole rect (at 0 0 180) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
       (net 7 "Net-(D1-Pad2)") (pinfunction "K") (pintype "passive") (tstamp 7fd37b23-d4ad-4c65-848c-0d358b31781c))
-    (pad "2" thru_hole oval (at 15.24 0) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
+    (pad "2" thru_hole oval (at 15.24 0 180) (size 3.2 3.2) (drill 1.6) (layers *.Cu *.Mask)
       (net 9 "Track2") (pinfunction "A") (pintype "passive") (tstamp 23943ff7-dd2f-4a5c-8473-925d535a9daa))
     (model "${KICAD6_3DMODEL_DIR}/Diode_THT.3dshapes/D_DO-201AD_P15.24mm_Horizontal.wrl"
       (offset (xyz 0 0 0))

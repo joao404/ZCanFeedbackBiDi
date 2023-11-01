@@ -51,6 +51,26 @@ void RailcomDecoder::configInputs()
             m_trackData[port].voltageOffset = m_modulConfig.voltageOffset[port];
         }
     }
+    // notify initial state which is no occupied
+    // for (uint8_t port = 0; port < m_trackData.size(); ++port)
+    // {
+    //     m_trackData[port].state = false;
+    //     notifyBlockOccupied(port, 0x01, m_trackData[port].state);
+    //     m_trackData[port].lastChangeTimeINms = millis();
+    //     if (m_debug)
+    //         ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", port, m_trackData[port].state);
+    // }
+    // for (uint8_t port = 0; port < m_railcomData.size(); ++port)
+    // {
+    //     for (auto &data : m_railcomData[port].railcomAddr)
+    //     {
+    //         data.address = 0;
+    //         data.changeReported = true;
+    //         data.direction = 0;
+
+    //     }
+    //     notifyLocoInBlock(port, m_railcomData[port].railcomAddr);
+    // }
     m_railcomDetectionPort = 0;
     m_railcomDetectionMeasurement = 0;
     configAdcDmaMode();
@@ -75,7 +95,7 @@ void RailcomDecoder::cyclicPortCheck()
         }
         m_currentSenseSum /= m_adcDmaBufferCurrentSense.size();
         bool state = m_currentSenseSum > m_trackSetVoltage;
-        portStatusCheck(state);
+        checkPortStatusChange(state);
         m_currentSenseControl.processed = true;
         m_detectionPort++;
         if (m_trackData.size() > m_detectionPort)
@@ -129,7 +149,7 @@ void RailcomDecoder::cyclicPortCheck()
             {
                 if (m_railcomDebug)
                 {
-                    m_printFunc("Loco left:0x%X\n", data.address);
+                    m_printFunc("L left:0x%X\n", data.address);
                 }
                 data.address = 0;
                 data.direction = 0;
@@ -159,7 +179,7 @@ void RailcomDecoder::onBlockEmpty()
         {
             if (m_railcomDebug)
             {
-                ZCanInterfaceObserver::m_printFunc("Loco left:0x%X\n", railcomAddr.address);
+                ZCanInterfaceObserver::m_printFunc("L left:0x%X\n", railcomAddr.address);
             }
         }
         railcomAddr.address = 0;
@@ -348,10 +368,12 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
     {
         if (AddressType::eLoco == m_addrReceived)
         {
+            // find first NACK/ACK/BUSY => end of transmission
+            size_t endOfMessage{channel2.size};
             for (size_t i = 0; i < channel2.size; i++)
             {
-                uint8_t firstByte = channel2.bytes[i].data;
-                if ((0x40 == firstByte) || (0x41 == firstByte) || (0x42 == firstByte))
+                uint8_t lastByte = channel2.bytes[i].data;
+                if ((0x40 == lastByte) || (0x41 == lastByte) || (0x42 == lastByte))
                 {
                     // NACK, ACK, BUSY
                     if (4 == channel2.bytes[i].direction)
@@ -364,44 +386,62 @@ void RailcomDecoder::analyzeRailcomData(uint16_t dmaBufferIN1samplePer1us[], siz
                     }
                     std::array<uint16_t, 4> data = {1, 2, 3, 4};
                     handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
+                    endOfMessage = i;
                     // no relevant data afterwards
                     break;
                 }
-                else if ((firstByte < 0x40) && ((channel2.size - i) > 1))
-                {
-                    uint8_t railcomId{static_cast<uint8_t>((channel2.bytes[i].data >> 2u) & 0xFu)};
-                    switch (railcomId)
-                    {
-                    case 0:
-                    case 3:
-                    case 7:
-                    case 12:
-
-                        if ((channel2.bytes[i + 1].startIndex - channel2.bytes[i].endIndex) < 6) // one byte commes direct after another
-                        {
-                            uint8_t highByte{channel2.bytes[i].data};
-                            uint8_t lowByte{channel2.bytes[i + 1].data};
-                            uint8_t railcomId = (highByte >> 2) & 0xF;
-
-                            if (4 == channel2.bytes[i].direction)
-                            {
-                                m_channel2Direction = 0x10;
-                            }
-                            if (-4 == channel2.bytes[i].direction)
-                            {
-                                m_channel2Direction = 0x11;
-                            }
-                            std::array<uint16_t, 4> data = {1, 2, 3, 4};
-                            handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
-                            break;
-                        }
-                        break;
-
-                    default:
-                        break;
-                    }
-                }
             }
+            // if (endOfMessage != channel2.size)
+            // {
+            //     // there could be some data
+            //     switch (endOfMessage)
+            //     {
+            //     case 0:
+            //     case 1:
+            //     case 2:
+            //     case 3:
+            //     case 4:
+            //     case 5:
+            //     case 6:
+            //     {
+            //         size_t i=0;
+            //         uint8_t railcomId{static_cast<uint8_t>((channel2.bytes[i].data >> 2u) & 0xFu)};
+            //         switch (railcomId)
+            //         {
+            //         case 0:
+            //         case 3:
+            //         case 7:
+            //         case 12:
+
+            //             if ((channel2.bytes[i + 1].startIndex - channel2.bytes[i].endIndex) < 6) // one byte commes direct after another
+            //             {
+            //                 uint8_t highByte{channel2.bytes[i].data};
+            //                 uint8_t lowByte{channel2.bytes[i + 1].data};
+            //                 uint8_t railcomId = (highByte >> 2) & 0xF;
+
+            //                 if (4 == channel2.bytes[i].direction)
+            //                 {
+            //                     m_channel2Direction = 0x10;
+            //                 }
+            //                 if (-4 == channel2.bytes[i].direction)
+            //                 {
+            //                     m_channel2Direction = 0x11;
+            //                 }
+            //                 std::array<uint16_t, 4> data = {1, 2, 3, 4};
+            //                 handleFoundLocoAddr(m_lastRailcomAddress, m_channel2Direction, Channel::eChannel2, data);
+            //                 break;
+            //             }
+            //             break;
+
+            //         default:
+            //             break;
+            //         }
+            //         break;
+            //     }
+            //     default:
+            //         break;
+            //     }
+            // }
         }
         else if (AddressType::eAcc == m_addrReceived)
         {
@@ -540,7 +580,7 @@ void RailcomDecoder::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, 
                     data.direction = direction;
                     if (m_railcomDebug)
                     {
-                        m_printFunc("Loco dir changed:0x%X 0x%X at %d\n", locoAddr, direction, channel);
+                        m_printFunc("dir:0x%X 0x%X %d\n", locoAddr, direction, channel);
                     }
                     data.changeReported = false;
                     checkRailcomDataChange(data);
@@ -560,7 +600,7 @@ void RailcomDecoder::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, 
                     data.direction = direction;
                     if (m_railcomDebug)
                     {
-                        m_printFunc("Loco appeared:0x%X D:0x%X at %d:%d\n", locoAddr, direction, m_railcomDetectionPort, channel);
+                        m_printFunc("come:0x%X D:0x%X %d:%d\n", locoAddr, direction, m_railcomDetectionPort, channel);
                         // m_printFunc("%x %x %x %x\n", railcomData[0], railcomData[1], railcomData[2], railcomData[3]);
                     }
                     data.changeReported = false;

@@ -90,7 +90,9 @@ protected:
 
     bool notifyBlockOccupied(uint8_t port, uint8_t type, bool occupied);
 
-    void portStatusCheck(bool state);
+    void checkPortStatusChange(bool state);
+
+    void checkDelayedStatusChange();
 
     virtual void onBlockOccupied();
     virtual void onBlockEmpty();

@@ -79,7 +79,7 @@ void CurrentDecoder::cyclicPortCheck()
         }
         m_currentSenseSum /= m_adcDmaBufferCurrentSense.size();
         bool state = m_currentSenseSum > m_trackSetVoltage;
-        portStatusCheck(state);
+        checkPortStatusChange(state);
         m_detectionPort++;
         if (m_trackData.size() > m_detectionPort)
         {

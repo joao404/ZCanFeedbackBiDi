@@ -100,7 +100,7 @@ void FeedbackDecoder::begin()
     // 3300mV per 4096 bits is 0.8mVperCount
     // I have a 22 Ohm resistor so 0.8mV per Count * 22 * current is offset down below
     // so I take 8*22 = 17,6 is round about 18
-    m_trackSetVoltage = 10 * m_modulConfig.trackConfig.trackSetCurrentINmA;
+    m_trackSetVoltage = 18 * m_modulConfig.trackConfig.trackSetCurrentINmA;
     ZCanInterfaceObserver::m_printFunc("SW Version: 0x%08X, build date: 0x%08X\n", m_firmwareVersion, m_buildDate);
     ZCanInterfaceObserver::m_printFunc("NetworkId %x MA %x CH2 %x\n", m_networkId, m_modulId, m_modulConfig.sendChannel2Data);
     ZCanInterfaceObserver::m_printFunc("trackSetCurrentINmA: %d\n", m_modulConfig.trackConfig.trackSetCurrentINmA);
@@ -121,7 +121,7 @@ void FeedbackDecoder::begin()
     }
 
     // Wait random time before starting logging to Z21
-    delay(millis());
+    delay(millis() / 2);
     // Send first ping
     sendPing(m_masterId, m_modulType, m_sessionId);
 
@@ -167,16 +167,52 @@ void FeedbackDecoder::cyclic()
     }
     ///////////////////////////////////////////////////////////////////////////
     cyclicPortCheck();
+    checkDelayedStatusChange();
 }
 
 void FeedbackDecoder::cyclicPortCheck()
 {
     bool state = !digitalRead(m_trackData[m_detectionPort].pin);
-    portStatusCheck(state);
+    checkPortStatusChange(state);
     m_detectionPort++;
     if (m_trackData.size() <= m_detectionPort)
     {
         m_detectionPort = 0;
+    }
+}
+
+void FeedbackDecoder::checkDelayedStatusChange()
+{
+    uint8_t index{0};
+    for (auto &port : m_trackData)
+    {
+        if (!port.changeReported)
+        {
+            uint32_t currentTimeINms = millis();
+            if (port.state)
+            {
+                if ((port.lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
+                {
+                    port.changeReported = true;
+                    notifyBlockOccupied(index, 0x01, port.state);
+                    onBlockOccupied();
+                    if (m_debug)
+                        ZCanInterfaceObserver::m_printFunc("p: %d s:%d\n", index, port.state);
+                }
+            }
+            else
+            {
+                if ((port.lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
+                {
+                    port.changeReported = true;
+                    notifyBlockOccupied(index, 0x01, port.state);
+                    onBlockEmpty();
+                    if (m_debug)
+                        ZCanInterfaceObserver::m_printFunc("p: %d s:%d\n", index, port.state);
+                }
+            }
+        }
+        index++;
     }
 }
 
@@ -210,39 +246,13 @@ bool FeedbackDecoder::notifyBlockOccupied(uint8_t port, uint8_t type, bool occup
     return sendAccessoryPort6Evt(m_modulId, port, type, value);
 }
 
-void FeedbackDecoder::portStatusCheck(bool state)
+void FeedbackDecoder::checkPortStatusChange(bool state)
 {
-    uint32_t currentTimeINms = millis();
     if (state != m_trackData[m_detectionPort].state)
     {
         m_trackData[m_detectionPort].changeReported = false;
         m_trackData[m_detectionPort].state = state;
-        m_trackData[m_detectionPort].lastChangeTimeINms = currentTimeINms;
-    }
-    if (!m_trackData[m_detectionPort].changeReported)
-    {
-        if (state)
-        {
-            if ((m_trackData[m_detectionPort].lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
-            {
-                m_trackData[m_detectionPort].changeReported = true;
-                notifyBlockOccupied(m_detectionPort, 0x01, state);
-                onBlockOccupied();
-                if (m_debug)
-                    ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", m_detectionPort, state);
-            }
-        }
-        else
-        {
-            if ((m_trackData[m_detectionPort].lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
-            {
-                m_trackData[m_detectionPort].changeReported = true;
-                notifyBlockOccupied(m_detectionPort, 0x01, state);
-                onBlockEmpty();
-                if (m_debug)
-                    ZCanInterfaceObserver::m_printFunc("port: %d state:%d\n", m_detectionPort, state);
-            }
-        }
+        m_trackData[m_detectionPort].lastChangeTimeINms = millis();
     }
 }
 
