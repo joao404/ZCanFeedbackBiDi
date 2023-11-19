@@ -22,19 +22,14 @@
 #include <DCCPacketScheduler.h>
 #include <list>
 
-
-constexpr float adcVoltage{3.3};
-constexpr float adcResolution{1024};
-constexpr float zeroVoltage{2.5};
-constexpr float voltagePerAmpere{0.185};
-constexpr float resistorDivider{2};
-constexpr float adcValuePerAmpere{adcVoltage / adcResolution / voltagePerAmpere / resistorDivider * 1000};
-constexpr float zeroAmpere{zeroVoltage / voltagePerAmpere / resistorDivider * 1000};
+constexpr uint32_t milliVoltagePerAmpere{185};
+constexpr uint32_t offsetVoltageINmV{1940};
+constexpr uint32_t resistorDivider{2};
+constexpr uint32_t offsetINmV{offsetVoltageINmV / resistorDivider};
 
 class z21 : public virtual ZCanInterfaceObserver, public virtual z21InterfaceObserver
 {
 public:
-    
     struct ConfigLoco
     {
         uint16_t adr;
@@ -43,24 +38,29 @@ public:
 
     struct ConfigDccStation
     {
-        uint8_t dccPin;    //Pin for DCC sginal out
+        uint8_t dccPin; // Pin for DCC sginal out
         uint8_t ndccPin;
-        uint8_t shortPin;  //Pin to detect Short Circuit
+        uint8_t enablePin1;
+        uint8_t enablePin2;
+        uint8_t shortPin; // Pin to detect Short Circuit
         uint16_t shortCircuitThresholdINmA;
     };
 
 public:
-    z21(ConfigDccStation& configDccStation, uint16_t hash, uint32_t serialNumber, HwType hwType, uint32_t swVersion, void (*printFunc)(const char *, ...) = nullptr, bool debugz21 = false, bool debugZ21 = false, bool debugZCan = false);
+    z21(ConfigDccStation &configDccStation, uint16_t hash, uint32_t serialNumber, HwType hwType, uint32_t swVersion, void (*printFunc)(const char *, ...) = nullptr, bool debugz21 = false, bool debugZ21 = false, bool debugZCan = false);
     virtual ~z21();
     void begin();
 
     void cyclic();
+
+    void dcc();
 
     void update(Observable &observable, void *data) override;
 
     void deleteLocoConfig();
 
 private:
+    SemaphoreHandle_t m_xMutex {nullptr};
 
     Preferences m_preferences;
 
@@ -74,9 +74,11 @@ private:
 
     uint8_t m_powerState{0};
 
-    uint8_t m_dccPin;    //Pin for DCC sginal out
+    uint8_t m_dccPin; // Pin for DCC sginal out
     uint8_t m_ndccPin;
-    uint8_t m_shortPin;  //Pin to detect Short Circuit
+    uint8_t m_enablePin1;
+    uint8_t m_enablePin2;
+    uint8_t m_shortPin; // Pin to detect Short Circuit
 
     uint16_t m_shortCircuitThresholdINmA;
 

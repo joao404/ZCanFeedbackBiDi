@@ -153,8 +153,8 @@ public:
   void disableInterrupt();
   void filterMask16Init(int bank, int idA = 0, int maskA = 0, int idB = 0, int maskB = 0x7ff); // 16b mask filters
   void filterList16Init(int bank, int idA = 0, int idB = 0, int idC = 0, int idD = 0);         // 16b list filters
-  void filterMask32Init(int bank, u_int32_t id = 0, u_int32_t mask = 0);
-  void filterList32Init(int bank, u_int32_t idA = 0, u_int32_t idB = 0); // 32b filters
+  void filterMask32Init(int bank, uint32_t id = 0, uint32_t mask = 0);
+  void filterList32Init(int bank, uint32_t idA = 0, uint32_t idB = 0); // 32b filters
   bool transmit(int txId, const void *ptr, unsigned int len);
   // int receive(volatile int *id, volatile int *fltrIdx, volatile void *pData);
   int receive(volatile int &id, volatile int &fltrIdx, volatile uint8_t pData[]);
@@ -186,5 +186,5 @@ private:
   IdType _extIDs = STD_ID_LEN;
   IdType _rxExtended;
   void filter16Init(int bank, int mode, int a = 0, int b = 0, int c = 0, int d = 0); // 16b filters
-  void filter32Init(int bank, int mode, u_int32_t a, u_int32_t b);                   // 32b filters
+  void filter32Init(int bank, int mode, uint32_t a, uint32_t b);                   // 32b filters
 };

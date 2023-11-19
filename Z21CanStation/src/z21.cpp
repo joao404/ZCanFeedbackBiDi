@@ -16,12 +16,14 @@
 
 #include "z21.h"
 
-z21::z21(ConfigDccStation& configDccStation, uint16_t hash, uint32_t serialNumber, HwType hwType, uint32_t swVersion, void (*printFunc)(const char *, ...), bool debugz21, bool debugZ21, bool debugZCan)
+z21::z21(ConfigDccStation &configDccStation, uint16_t hash, uint32_t serialNumber, HwType hwType, uint32_t swVersion, void (*printFunc)(const char *, ...), bool debugz21, bool debugZ21, bool debugZCan)
     : ZCanInterfaceObserver(printFunc, debugZCan),
       z21InterfaceObserver(hwType, swVersion, debugZ21),
       m_dccPin(configDccStation.dccPin),
       m_ndccPin(configDccStation.ndccPin),
-      m_shortPin(configDccStation.shortPin), 
+      m_enablePin1(configDccStation.enablePin1),
+      m_enablePin2(configDccStation.enablePin2),
+      m_shortPin(configDccStation.shortPin),
       m_shortCircuitThresholdINmA(configDccStation.shortCircuitThresholdINmA),
       m_serialNumber(serialNumber),
       m_debug(debugz21)
@@ -34,7 +36,7 @@ z21::~z21()
 
 void z21::begin()
 {
-if (!m_preferences.begin(m_namespaceZ21, true))
+  if (!m_preferences.begin(m_namespaceZ21, true))
   {
     Serial.println(F("Access preferences failed"));
   }
@@ -68,12 +70,14 @@ if (!m_preferences.begin(m_namespaceZ21, true))
     m_preferences.end();
   }
 
+  pinMode(m_enablePin1, OUTPUT);
+  pinMode(m_enablePin2, OUTPUT);
+
+  digitalWrite(m_enablePin1, LOW);
+  digitalWrite(m_enablePin2, LOW);
 
   m_dps.setup(m_dccPin, m_ndccPin, DCC128, ROCO, OFF); // with Railcom but shutdown by default
-  m_dps.setrailcom();                                // enable railcom
-
-  //pinMode(m_shortPin, INPUT);     // set short pin
-  //digitalWrite(m_shortPin, HIGH); // Pull-UP
+  m_dps.setrailcom();                                  // enable railcom
 
   Serial.print("Power: ");
   Serial.println(m_dps.getpower());
@@ -81,11 +85,9 @@ if (!m_preferences.begin(m_namespaceZ21, true))
   ZCanInterfaceObserver::begin();
   z21InterfaceObserver::begin();
 
+  m_xMutex = xSemaphoreCreateMutex(); // crete a mutex object
+
   delay(1000);
-
-  // m_dps.setpower(ON);// enable power
-
-  // m_dps.setSpeed128(232,0);
 }
 
 void z21::cyclic()
@@ -97,17 +99,45 @@ void z21::cyclic()
     sendPing(0x102FC230, z21Type, 0);
     m_lastPingSendTimeINms = currentTimeINms;
   }
-  m_dps.update();
+  // m_dps.update();
 
   // short circuit detection using ACS712 5A
+  uint32_t sensorINmV{analogReadMilliVolts(m_shortPin)};
+  uint32_t currentINmV{static_cast<uint32_t>((sensorINmV > offsetINmV) ? sensorINmV - offsetINmV : offsetINmV - sensorINmV)};
+  m_currentINmA = static_cast<uint16_t>(currentINmV / milliVoltagePerAmpere);
 
-  float sensorValue {static_cast<float>(analogRead(m_shortPin))};
-  m_currentINmA = static_cast<uint16_t>(sensorValue * adcValuePerAmpere - zeroAmpere);
-   if (m_currentINmA > m_shortCircuitThresholdINmA) {  //Short Circuit!
-      if ((OFF != m_dps.getpower()) && (SHORT != m_dps.getpower())) {
+  if (m_currentINmA > m_shortCircuitThresholdINmA)
+  { // Short Circuit!
+    if ((OFF != m_dps.getpower()) && (SHORT != m_dps.getpower()))
+    {
+      digitalWrite(m_enablePin1, LOW);
+      digitalWrite(m_enablePin2, LOW);
+      if (xSemaphoreTake(m_xMutex, portMAX_DELAY))
+      {
         m_dps.setpower(SHORT);
-        Serial.println("Short Circuit");
+        xSemaphoreGive(m_xMutex); // release the mutex
       }
+      Serial.printf("Short Circuit:%d %d %d %f\n", sensorINmV, offsetINmV, currentINmV, m_currentINmA);
+      uint8_t data[16];
+      data[0] = static_cast<uint8_t>(z21Interface::XHeader::LAN_X_BC_TRACK_POWER);
+      data[1] = 0x00; // Power OFF
+      EthSend(0, 0x07, z21Interface::Header::LAN_X_HEADER, data, true, (static_cast<uint16_t>(BcFlagShort::Z21bcAll) | static_cast<uint16_t>(BcFlagShort::Z21bcNetAll)));
+
+      z21InterfaceObserver::setPower(EnergyState::csTrackVoltageOff);
+    }
+  }
+}
+
+void z21::dcc()
+{
+  if (xSemaphoreTake(m_xMutex, portMAX_DELAY))
+  {
+    m_dps.update();
+    xSemaphoreGive(m_xMutex); // release the mutex
+  }
+  else
+  {
+    Serial.println("dcc");
   }
 }
 
@@ -122,7 +152,7 @@ void z21::saveLocoConfig()
   ConfigLoco buffer[256];
 
   size_t index = 0;
-  for (ConfigLoco& n : m_locos)
+  for (ConfigLoco &n : m_locos)
   {
     buffer[index++] = n;
     index++;
@@ -253,7 +283,17 @@ void z21::notifyz21InterfaceRailPower(EnergyState State)
 
   if (EnergyState::csNormal == State)
   {
-    m_dps.setpower(ON); // enable power
+    digitalWrite(m_enablePin1, HIGH);
+    digitalWrite(m_enablePin2, HIGH);
+    if (xSemaphoreTake(m_xMutex, portMAX_DELAY))
+    {
+      m_dps.setpower(ON);       // enable power
+      xSemaphoreGive(m_xMutex); // release the mutex
+    }
+    else
+    {
+      Serial.println("m_dps.setpower(ON);");
+    }
     uint8_t data[16];
     data[0] = static_cast<uint8_t>(z21Interface::XHeader::LAN_X_BC_TRACK_POWER);
     data[1] = 0x01;
@@ -261,7 +301,15 @@ void z21::notifyz21InterfaceRailPower(EnergyState State)
   }
   else if (EnergyState::csEmergencyStop == State)
   {
-    m_dps.eStop();
+    if (xSemaphoreTake(m_xMutex, portMAX_DELAY))
+    {
+      m_dps.eStop();
+      xSemaphoreGive(m_xMutex); // release the mutex
+    }
+    else
+    {
+      Serial.println("m_dps.eStop();");
+    }
     uint8_t data[16];
     data[0] = static_cast<uint8_t>(z21Interface::XHeader::LAN_X_BC_TRACK_POWER);
     data[1] = 0x00; // Power OFF
@@ -269,7 +317,17 @@ void z21::notifyz21InterfaceRailPower(EnergyState State)
   }
   else if (EnergyState::csTrackVoltageOff == State)
   {
-    m_dps.setpower(OFF); // disable power
+    if (xSemaphoreTake(m_xMutex, portMAX_DELAY))
+    {
+      m_dps.setpower(OFF);      // disable power
+      xSemaphoreGive(m_xMutex); // release the mutex
+    }
+    else
+    {
+      Serial.println("m_dps.setpower(OFF);");
+    }
+    digitalWrite(m_enablePin1, LOW);
+    digitalWrite(m_enablePin2, LOW);
     uint8_t data[16];
     data[0] = static_cast<uint8_t>(z21Interface::XHeader::LAN_X_BC_TRACK_POWER);
     data[1] = 0x00; // Power OFF
@@ -280,7 +338,16 @@ void z21::notifyz21InterfaceRailPower(EnergyState State)
 
 void z21::notifyz21InterfaceLocoState(uint16_t Adr, uint8_t data[])
 {
-  m_dps.getLocoData(Adr, data);
+  if (xSemaphoreTake(m_xMutex, portMAX_DELAY))
+  {
+    m_dps.getLocoData(Adr, data);
+    xSemaphoreGive(m_xMutex); // release the mutex
+  }
+  else
+  {
+    Serial.println("notifyz21InterfaceLocoState");
+  }
+
   for (auto finding = m_locos.begin(); finding != m_locos.end(); ++finding)
   {
     if (finding->adr == Adr)
@@ -292,7 +359,15 @@ void z21::notifyz21InterfaceLocoState(uint16_t Adr, uint8_t data[])
 
 void z21::notifyz21InterfaceLocoFkt(uint16_t Adr, uint8_t type, uint8_t fkt)
 {
-  m_dps.setLocoFunc(Adr, type, fkt);
+  if (xSemaphoreTake(m_xMutex, portMAX_DELAY))
+  {
+    m_dps.setLocoFunc(Adr, type, fkt);
+    xSemaphoreGive(m_xMutex); // release the mutex
+  }
+  else
+  {
+    Serial.println("notifyz21InterfaceLocoFkt");
+  }
 }
 
 // //--------------------------------------------------------------------------------------------
@@ -312,26 +387,34 @@ void z21::notifyz21InterfaceLocoSpeed(uint16_t Adr, uint8_t speed, uint8_t stepC
     }
   }
 
-  if(finding == m_locos.end())
+  if (finding == m_locos.end())
   {
     m_locos.emplace_back(ConfigLoco{Adr, stepConfig});
     saveLocoConfig();
   }
 
-  switch (stepConfig)
+  if (xSemaphoreTake(m_xMutex, portMAX_DELAY))
   {
-  case static_cast<uint8_t>(StepConfig::Step14):
-    m_dps.setSpeed14(Adr, speed);
-    break;
-  case static_cast<uint8_t>(StepConfig::Step28):
-    m_dps.setSpeed28(Adr, speed);
-    break;
-  case static_cast<uint8_t>(StepConfig::Step128):
-    m_dps.setSpeed128(Adr, speed);
-    break;
-  default:
-    m_dps.setSpeed28(Adr, speed);
-    break;
+    switch (stepConfig)
+    {
+    case static_cast<uint8_t>(StepConfig::Step14):
+      m_dps.setSpeed14(Adr, speed);
+      break;
+    case static_cast<uint8_t>(StepConfig::Step28):
+      m_dps.setSpeed28(Adr, speed);
+      break;
+    case static_cast<uint8_t>(StepConfig::Step128):
+      m_dps.setSpeed128(Adr, speed);
+      break;
+    default:
+      m_dps.setSpeed28(Adr, speed);
+      break;
+    }
+    xSemaphoreGive(m_xMutex); // release the mutex
+  }
+  else
+  {
+    Serial.println("notifyz21InterfaceLocoSpeed");
   }
 }
 
@@ -354,17 +437,17 @@ void z21::notifyz21InterfacegetSystemInfo(uint8_t client)
 
 void z21::handleGetLocoMode(uint16_t adr, uint8_t &mode)
 {
-  mode = 0;//allways DCC
+  mode = 0; // allways DCC
 }
 
 void z21::handleSetLocoMode(uint16_t adr, uint8_t mode)
 {
-// not needed
+  // not needed
 }
 
 void z21::handleGetTurnOutMode(uint16_t adr, uint8_t &mode)
 {
-  mode = 0;// allways DCC
+  mode = 0; // allways DCC
 }
 
 void z21::handleSetTurnOutMode(uint16_t adr, uint8_t mode)

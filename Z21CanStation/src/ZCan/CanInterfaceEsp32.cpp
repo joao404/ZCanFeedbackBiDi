@@ -24,10 +24,11 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 
-CanInterfaceEsp32::CanInterfaceEsp32(twai_timing_config_t timingConfig, gpio_num_t txPin, gpio_num_t rxPin)
-: m_timingConfig(timingConfig),
-m_txPin(txPin),
-m_rxPin(rxPin)
+CanInterfaceEsp32::CanInterfaceEsp32(twai_timing_config_t timingConfig, gpio_num_t txPin, gpio_num_t rxPin, bool debug)
+    : m_timingConfig(timingConfig),
+      m_txPin(txPin),
+      m_rxPin(rxPin),
+      m_debug(debug)
 {
 }
 
@@ -136,25 +137,40 @@ void CanInterfaceEsp32::errorHandling()
     twai_read_alerts(&alerts, 0);
     if (alerts & TWAI_ALERT_ABOVE_ERR_WARN)
     {
-        Serial.println(F("Surpassed Error Warning Limit"));
+        if (m_debug)
+        {
+            Serial.println(F("Surpassed Error Warning Limit"));
+        }
     }
     if (alerts & TWAI_ALERT_ERR_PASS)
     {
-        Serial.println(F("Entered Error Passive state"));
+        if (m_debug)
+        {
+            Serial.println(F("Entered Error Passive state"));
+        }
     }
     if (alerts & TWAI_ALERT_BUS_OFF)
     {
-        Serial.println(F("Bus Off state"));
+        if (m_debug)
+        {
+            Serial.println(F("Bus Off state"));
+        }
         // Prepare to initiate bus recovery, reconfigure alerts to detect bus recovery completion
         // twai_reconfigure_alerts(TWAI_ALERT_BUS_RECOVERED, NULL);
         for (int i = 3; i > 0; i--)
         {
-            Serial.print(F("Initiate bus recovery in"));
-            Serial.println(i);
+            if (m_debug)
+            {
+                Serial.print(F("Initiate bus recovery in"));
+                Serial.println(i);
+            }
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
         twai_initiate_recovery(); // Needs 128 occurrences of bus free signal
-        Serial.println(F("Initiate bus recovery"));
+        if (m_debug)
+        {
+            Serial.println(F("Initiate bus recovery"));
+        }
     }
     if (alerts & TWAI_ALERT_BUS_RECOVERED)
     {
@@ -162,15 +178,24 @@ void CanInterfaceEsp32::errorHandling()
         Serial.println(F("Bus Recovered"));
         if (twai_start() == ESP_OK)
         {
-            Serial.println(F("TWAI Driver start success..."));
+            if (m_debug)
+            {
+                Serial.println(F("TWAI Driver start success..."));
+            }
         }
     }
     if (alerts & TWAI_ALERT_RX_QUEUE_FULL)
     {
-        Serial.println(F("RxFull"));
+        if (m_debug)
+        {
+            Serial.println(F("RxFull"));
+        }
     }
     if (alerts & TWAI_ALERT_BUS_ERROR)
     {
-        Serial.println(F("BusError"));
+        if (m_debug)
+        {
+            Serial.println(F("BusError"));
+        }
     }
 }

@@ -22,7 +22,7 @@
 class CanInterfaceEsp32 : public CanInterface
 {
 public:
-    CanInterfaceEsp32(twai_timing_config_t timingConfig, gpio_num_t txPin, gpio_num_t rxPin);
+    CanInterfaceEsp32(twai_timing_config_t timingConfig, gpio_num_t txPin, gpio_num_t rxPin, bool m_debug = false);
     virtual ~CanInterfaceEsp32();
 
     void begin() override;
@@ -37,6 +37,7 @@ private:
     twai_timing_config_t m_timingConfig;
     gpio_num_t m_txPin;
     gpio_num_t m_rxPin;
+    bool m_debug;
 
     void errorHandling();
 };

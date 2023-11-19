@@ -139,18 +139,18 @@ void Stm32Can::filter16Init(int bank, int mode, int a, int b, int c, int d) // 1
     (m_regs->FA1R) |= (1 << bank);                                         // activate this filter ]
     (m_regs->FMR) &= ~(1 << 0);                                            // ~FINIT  'active' filter mode ]
 }
-void Stm32Can::filterList32Init(int bank, u_int32_t idA, u_int32_t idB) // 32b filters
+void Stm32Can::filterList32Init(int bank, uint32_t idA, uint32_t idB) // 32b filters
 {
     filter32Init(bank, 1, idA, idB);
     // filter32Init(0, 1, 0x00232461, 0x00232461);
 }
 
-void Stm32Can::filterMask32Init(int bank, u_int32_t id, u_int32_t mask) // 32b filters
+void Stm32Can::filterMask32Init(int bank, uint32_t id, uint32_t mask) // 32b filters
 {
     filter32Init(bank, 0, id, mask);
 }
 
-void Stm32Can::filter32Init(int bank, int mode, u_int32_t a, u_int32_t b) // 32b filters
+void Stm32Can::filter32Init(int bank, int mode, uint32_t a, uint32_t b) // 32b filters
 {
     (m_regs->FMR) |= (1 << 0);                                             // FINIT  'init' filter mode
     (m_regs->FA1R) &= ~(1 << bank);                                        // de-activate filter 'bank'

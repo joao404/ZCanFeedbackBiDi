@@ -42,16 +42,22 @@ const uint16_t swVersion{0x0142};
 const int16_t z21Port{21105};
 
 std::shared_ptr<UdpInterfaceEsp32> udpInterface = std::make_shared<UdpInterfaceEsp32>(30, z21Port, false);
-z21::ConfigDccStation configDccStation{25, 26, 34, 2000};//2 Ampere max current
+z21::ConfigDccStation configDccStation{25, 26, 27, 16, 34, 2000};//2 Ampere max current
 z21 centralStation(configDccStation, hash, serialNumber, z21Interface::HwType::Z21_XL, swVersion, xprintf, true, false, false);
 
 AsyncUDP udp;
+
+void loopServices(void* pvParameters);
 
 /**********************************************************************************/
 void setup()
 {
   Serial.begin(230000);
   xdev_out(uart_putc);
+
+  uint32_t frequency = getCpuFrequencyMhz();
+
+  Serial.printf("CPU: %d Mhz\n", frequency);
 
   AutoConnectConfig configAutoConnect;
 
@@ -134,19 +140,41 @@ void setup()
       }
       Serial.print("\n"); });
   }
+
+    xTaskCreatePinnedToCore (
+    loopServices,     // Function to implement the task
+    "service",   // Name of the task
+    5000,      // Stack size in bytes
+    NULL,      // Task input parameter
+    0,         // Priority of the task
+    NULL,      // Task handle.
+    0          // Core where the task should run
+  );
+
   Serial.println("OK"); // start - reset serial receive Buffer
 }
 
 /**********************************************************************************/
 void loop()
 {
-  WebService *webService = WebService::getInstance();
+  centralStation.dcc();
+}
+
+void loopServices(void* pvParameters)
+{
+  while(1)
+  {
+      WebService *webService = WebService::getInstance();
   if (nullptr != webService)
   {
     webService->cyclic();
   }
+  taskYIELD();
   canInterface->cyclic();
+  taskYIELD();
   udpInterface->cyclic();
+  taskYIELD();
   centralStation.cyclic();
-  // delayMicroseconds(1);
+  taskYIELD();
+  }
 }
