@@ -153,8 +153,8 @@ void z21::saveLocoConfig()
 
   size_t index = 0;
   for (ConfigLoco &n : m_locos)
-  {
-    buffer[index++] = n;
+  {  
+    buffer[index] = n;
     index++;
   }
 
@@ -349,7 +349,7 @@ void z21::notifyz21InterfaceLocoState(uint16_t Adr, uint8_t data[])
   }
 
   for (auto finding = m_locos.begin(); finding != m_locos.end(); ++finding)
-  {
+  { 
     if (finding->adr == Adr)
     {
       data[0] = finding->steps;
@@ -382,12 +382,12 @@ void z21::notifyz21InterfaceLocoSpeed(uint16_t Adr, uint8_t speed, uint8_t stepC
       {
         finding->steps = stepConfig;
         saveLocoConfig();
-        break;
       }
+      break;
     }
   }
 
-  if (finding == m_locos.end())
+  if (finding == m_locos.end())// address never found
   {
     m_locos.emplace_back(ConfigLoco{Adr, stepConfig});
     saveLocoConfig();

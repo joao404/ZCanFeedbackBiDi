@@ -5,7 +5,12 @@
 WebService *WebService::m_instance{nullptr};
 
 WebService::WebService()
-    : m_AutoConnect(m_WebServer)
+    : m_AutoConnect(m_WebServer),
+    m_auxConfig("/", "Config"),
+      m_deleteLocoConfig("deleteLocoConfig", "deleteLocoConfig", "Delete internal memory for z21 loco config", false),
+    m_configButton("configButton", "Run", "/configstatus"),
+    m_auxConfigStatus("/configstatus", "Config Status"),
+      m_readingStatus("readingStatus", "readingStatus", "Done")
 {
 }
 
@@ -27,11 +32,31 @@ void WebService::cyclic()
     m_AutoConnect.handleClient();
 }
 
-void WebService::begin(AutoConnectConfig &autoConnectConfig)
+void WebService::begin(AutoConnectConfig &autoConnectConfig, std::function<void(void)> deleteLocoConfigFkt)
 {
+m_deleteLocoConfigFkt = deleteLocoConfigFkt;
+
+m_auxConfigStatus.on([this](AutoConnectAux &aux, PageArgument &arg)
+                            {
+                                if (m_AutoConnect.where() != "/configstatus") 
+                                {
+                                    if (m_WebServer.hasArg("deleteLocoConfig"))
+                                    {
+                                        Serial.println("deleting z21 loco config");
+                                        m_deleteLocoConfigFkt();
+                                    }
+                                }                            
+                            return String(); });
+
     m_AutoConnect.config(autoConnectConfig);
 
     m_AutoConnect.onNotFound(WebService::handleNotFound);
+
+    m_auxConfig.add({m_deleteLocoConfig, m_configButton});
+    m_auxConfigStatus.add({m_readingStatus});
+
+    m_AutoConnect.join(m_auxConfig);
+    m_AutoConnect.join(m_auxConfigStatus);
 
     m_AutoConnect.begin();
 

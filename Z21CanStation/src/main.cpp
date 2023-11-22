@@ -80,7 +80,7 @@ void setup()
   configAutoConnect.beginTimeout = 15000;
   configAutoConnect.autoReset = false;
 
-  //configAutoConnect.homeUri = "/_ac";
+  configAutoConnect.homeUri = "/";
 
   // reconnect with last ssid in handleClient
   configAutoConnect.autoReconnect = true;
@@ -96,7 +96,12 @@ void setup()
 
   if (nullptr != webService)
   {
-    webService->begin(configAutoConnect);
+    auto deleteLocoConfigFkt = []()
+    {
+      centralStation.deleteLocoConfig();
+    };
+
+    webService->begin(configAutoConnect, deleteLocoConfigFkt);
   }
 
   if (nullptr != canInterface.get())
