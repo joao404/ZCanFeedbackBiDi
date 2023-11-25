@@ -14,17 +14,17 @@
  * LICENSE file for more details.
  */
 
-
 #pragma once
 
 #include <array>
 
-//FiFo buffer with fixed size
-//Underlying container is a std::array as circular buffer
+// FiFo buffer with fixed size
+// Underlying container is a std::array as circular buffer
 
-template<class TYPE, std::size_t SIZE> class FiFo
+template <class TYPE, std::size_t MEM_SIZE>
+class FiFo
 {
-    public:
+public:
     FiFo(){};
     virtual ~FiFo(){};
 
@@ -35,18 +35,23 @@ template<class TYPE, std::size_t SIZE> class FiFo
 
     bool isFull()
     {
-        return SIZE == m_count;
+        return MEM_SIZE == m_count;
+    }
+
+    size_t count()
+    {
+        return m_count;
     }
 
     // removes the first element of the FIFO
     // returns true if successful
-    bool front(TYPE* data)
+    bool front(TYPE &data)
     {
         bool returnValue{false};
-        if(!isEmpty())
+        if (!isEmpty())
         {
-            returnValue=true;
-            data = m_output;        
+            returnValue = true;
+            data = *m_output;
         }
         return returnValue;
     }
@@ -56,17 +61,17 @@ template<class TYPE, std::size_t SIZE> class FiFo
     bool pop()
     {
         bool returnValue{false};
-        if(!isEmpty())
+        if (!isEmpty())
         {
             returnValue = true;
-            if(m_output == &m_buffer[SIZE-1])
+            if (m_output == &m_buffer[MEM_SIZE - 1])
             {
-                //already last element of buffer => switch to first element
+                // already last element of buffer => switch to first element
                 m_output = &m_buffer[0];
             }
             else
             {
-                m_output++;   
+                m_output++;
             }
             m_count--;
         }
@@ -75,16 +80,16 @@ template<class TYPE, std::size_t SIZE> class FiFo
 
     // adds an element at the end of the FIFO
     // returns true if successful
-    bool emplace(TYPE& data)
+    bool emplace(TYPE &data)
     {
         bool returnValue{false};
-        if(SIZE > m_count)
+        if (MEM_SIZE > m_count)
         {
             // we can at least save one more element
-            *m_nextInput = data; 
-            if(m_nextInput == &m_buffer[SIZE-1])
+            *m_nextInput = data;
+            if (m_nextInput == &m_buffer[MEM_SIZE - 1])
             {
-                //already last element of buffer => switch to first element
+                // already last element of buffer => switch to first element
                 m_nextInput = &m_buffer[0];
             }
             else
@@ -92,17 +97,18 @@ template<class TYPE, std::size_t SIZE> class FiFo
                 m_nextInput++;
             }
             m_count++;
-        }         
+            returnValue = true;
+        }
         return returnValue;
     }
 
-    private:
-    std::array<TYPE, SIZE> m_buffer;
+private:
+    std::array<TYPE, MEM_SIZE> m_buffer;
 
-    // points to element that return when 
-    TYPE* m_output{&m_buffer[0]};
+    // points to element that return when
+    TYPE *m_output{&m_buffer[0]};
     // points to next element that is written
-    TYPE* m_nextInput{&m_buffer[0]};
+    TYPE *m_nextInput{&m_buffer[0]};
     // number of elements in FIFO
     size_t m_count{0};
 };
