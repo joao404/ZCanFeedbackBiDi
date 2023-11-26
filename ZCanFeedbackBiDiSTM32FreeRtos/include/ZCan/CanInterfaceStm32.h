@@ -48,7 +48,7 @@ private:
 
     bool m_usingInterrupt;
 
-    FiFo<Can::Message, 30> m_transmitQueue;
+    FiFo<Can::Message, 50> m_transmitQueue;
 
     void errorHandling();
 
