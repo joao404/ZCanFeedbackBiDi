@@ -64,9 +64,9 @@ void CanInterfaceStm32::cyclic()
             notify(&frame);
         }
     }
-    if (0 != m_transmitQueue.size())
+    Can::Message frame;
+    if (m_transmitQueue.front(frame))
     {
-        auto frame = m_transmitQueue.front();
         if (m_canHandle.transmit(frame.identifier, &frame.data[0], frame.data_length_code))
         {
             m_transmitQueue.pop();

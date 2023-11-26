@@ -29,7 +29,7 @@ typedef struct RailcomPacket12Bit
                            };
     // index 0 is first received byte
     RailcomPacket12Bit(std::array<uint8_t, 2> input) : id((input[0] >> 2) & 0xF),
-                                                       data{{((input[0] & 0x03) << 6) | (input[1] & 0x3F)}} {
+                                                       data{{static_cast<uint8_t>(((input[0] & 0x03) << 6u) | (input[1] & 0x3F))}} {
 
                                                        };
 } RailcomPacket12Bit;
@@ -44,7 +44,7 @@ typedef struct RailcomPacket18Bit
                            };
     // index 0 is first received byte
     RailcomPacket18Bit(std::array<uint8_t, 3> input) : id((input[0] >> 2) & 0xF),
-                                                       data{{((input[1] & 0x03) << 6) | (input[2] & 0x3F), ((input[0] & 0x03) << 4) | ((input[1] & 0x3B) >> 2)}} {
+                                                       data{{static_cast<uint8_t>(((input[1] & 0x03) << 6) | (input[2] & 0x3F)), static_cast<uint8_t>(((input[0] & 0x03) << 4) | ((input[1] & 0x3B) >> 2))}} {
 
                                                        };
 } RailcomPacket18Bit;
@@ -59,7 +59,7 @@ typedef struct RailcomPacket24Bit
                            };
     // index 0 is first received byte
     RailcomPacket24Bit(std::array<uint8_t, 4> input) : id((input[0] >> 2) & 0xF),
-                                                       data{{((input[2] & 0x03) << 6) | (input[3] & 0x3F), ((input[1] & 0x0F) << 4) | ((input[2] & 0x3B) >> 2), ((input[0] & 0x03) << 2) | ((input[1] & 0x30) >> 4)}} {
+                                                       data{{static_cast<uint8_t>(((input[2] & 0x03) << 6) | (input[3] & 0x3F)), static_cast<uint8_t>(((input[1] & 0x0F) << 4) | ((input[2] & 0x3B) >> 2)), static_cast<uint8_t>(((input[0] & 0x03) << 2) | ((input[1] & 0x30) >> 4))}} {
 
                                                        };
 } RailcomPacket24Bit;
@@ -74,7 +74,7 @@ typedef struct RailcomPacket36Bit
                            };
     // index 0 is first received byte
     RailcomPacket36Bit(std::array<uint8_t, 6> input) : id((input[0] >> 2) & 0xF),
-                                                       data{{((input[4] & 0x03) << 6) | (input[5] & 0x3F), ((input[3] & 0x0F) << 4) | ((input[4] & 0x3B) >> 2), ((input[2] & 0x3F) << 2) | ((input[3] & 0x30) >> 4), ((input[0] & 0x03) << 6) | (input[1] & 0x3F)}} {
+                                                       data{{static_cast<uint8_t>(((input[4] & 0x03) << 6) | (input[5] & 0x3F)), static_cast<uint8_t>(((input[3] & 0x0F) << 4) | ((input[4] & 0x3B) >> 2)), static_cast<uint8_t>(((input[2] & 0x3F) << 2) | ((input[3] & 0x30) >> 4)), static_cast<uint8_t>(((input[0] & 0x03) << 6) | (input[1] & 0x3F))}} {
 
                                                        };
 } RailcomPacket36Bit;

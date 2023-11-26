@@ -20,6 +20,7 @@
 #include <queue>
 #include "ZCan/CanInterface.h"
 #include "Stm32f1/Stm32Can.h"
+#include "Helper/FiFo.h"
 
 class CanInterfaceStm32 : public CanInterface
 {
@@ -47,7 +48,7 @@ private:
 
     bool m_usingInterrupt;
 
-    std::queue<Can::Message> m_transmitQueue;
+    FiFo<Can::Message, 30> m_transmitQueue;
 
     void errorHandling();
 

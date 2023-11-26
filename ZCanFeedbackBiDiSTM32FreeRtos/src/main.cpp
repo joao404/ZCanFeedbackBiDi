@@ -90,41 +90,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
   railcomDecoder.callbackAdcReadFinished(hadc);
 }
 
-SemaphoreHandle_t sem;
-
-static void Thread1(void *arg)
-{
-  UNUSED(arg);
-  while (1)
-  {
-
-    // Wait for signal from thread 2.
-    xSemaphoreTake(sem, portMAX_DELAY);
-
-    // TaskHandle_t xHandle;
-
-    //  // Create a task, storing the handle.
-    //  xTaskCreate( vTaskCode, "NAME", STACK_SIZE, NULL, tskIDLE_PRIORITY, &xHandle );
-
-    //  // ...
-
-    //  // Use the handle to suspend the created task.
-    //  vTaskSuspend( xHandle );
-
-    //  // ...
-
-    //  // The created task will not run during this period, unless
-    //  // another task calls vTaskResume( xHandle ).
-
-    //  //...
-
-    //  // Suspend ourselves.
-    //  vTaskSuspend( NULL );
-  }
-}
-
-void ThreadCyclic(void *arg);
-void ThreadLedBlink(void *arg);
+static void ThreadCyclic(void *arg);
+static void ThreadLedBlink(void *arg);
 
 NmraDcc dcc;
 DCC_MSG Packet;
@@ -141,26 +108,17 @@ void setup()
   // Calibrate The ADC On Power-Up For Better Accuracy
   HAL_ADCEx_Calibration_Start(&hadc1);
 
-  portBASE_TYPE s1;
 
-  sem = xSemaphoreCreateCounting(1, 0);
-  if (nullptr == sem)
+  if (pdPASS != xTaskCreate(ThreadLedBlink, nullptr, 256, nullptr, 0, nullptr))
   {
-    Serial.println("Failed to create semaphore");
+    Serial.println(F("Failed to create Blink task"));
     while (1)
       ;
   }
 
-  if (pdPASS != xTaskCreate(ThreadLedBlink, nullptr, configMINIMAL_STACK_SIZE, nullptr, 0, nullptr))
+  if (pdPASS != xTaskCreate(ThreadCyclic, nullptr, 256, nullptr, 0, nullptr))
   {
-    Serial.println("Failed to create Blink task");
-    while (1)
-      ;
-  }
-
-  if (pdPASS != xTaskCreate(ThreadCyclic, nullptr, configMINIMAL_STACK_SIZE, nullptr, 1, nullptr))
-  {
-    Serial.println("Failed to create cyclic task");
+    Serial.println(F("Failed to create cyclic task"));
     while (1)
       ;
   }
@@ -197,6 +155,7 @@ void setup()
 
 #endif
   dcc.pin(PA8, 0);
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 2, 0);
   dcc.init(MAN_ID_DIY, 10, 0, 0);
   Serial.println("Finished config");
 
@@ -219,13 +178,17 @@ void ThreadCyclic(void *arg)
   while (1)
   {
     dcc.process();
+    taskYIELD();
     canInterface->cyclic();
+    taskYIELD();
     railcomDecoder.cyclic();
+    taskYIELD();
 #ifdef FUNCTIONDECODER
     functionDecoder.cyclic();
 #else
     feedbackDecoder2.cyclic();
 #endif
+    taskYIELD();
     statusLed.cyclic();
     taskYIELD();
   }
@@ -234,9 +197,12 @@ void ThreadCyclic(void *arg)
 void ThreadLedBlink(void *arg)
 {
   UNUSED(arg);
+  // TickType_t xLastWakeTime {xTaskGetTickCount()};
   while (1)
   {
+    // vTaskDelayUntil( &xLastWakeTime, (static_cast<TickType_t>(ledBlinkIntervalINms) * configTICK_RATE_HZ) / 1000L );
     digitalToggle(ledPin);
+    // xprintf("H:%d\r\n", xPortGetFreeHeapSize());
     vTaskDelay((static_cast<TickType_t>(ledBlinkIntervalINms) * configTICK_RATE_HZ) / 1000L);
   }
 }

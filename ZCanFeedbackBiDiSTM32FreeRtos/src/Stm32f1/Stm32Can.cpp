@@ -63,6 +63,11 @@ void Stm32Can::begin(IdType addrType, uint32_t brp, BusType hw)
 
 void Stm32Can::begin(IdType addrType, uint32_t brp, bool singleWire, bool alt, bool pullup)
 {
+    HAL_NVIC_SetPriority(USB_HP_CAN1_TX_IRQn, 6, 0);
+    HAL_NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, 6, 0);
+    HAL_NVIC_SetPriority(CAN1_RX1_IRQn, 6, 0);
+    HAL_NVIC_SetPriority(CAN1_SCE_IRQn, 6, 0);
+
     uint8_t inp_float = 0b0100;
     uint8_t inp_pull = 0b1000;
     uint8_t alt_out = 0b1001;

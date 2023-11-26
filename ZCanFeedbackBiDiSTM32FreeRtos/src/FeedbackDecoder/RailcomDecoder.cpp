@@ -71,6 +71,20 @@ void RailcomDecoder::configInputs()
     //     }
     //     notifyLocoInBlock(port, m_railcomData[port].railcomAddr);
     // }
+    m_currentSenseDataReady = xSemaphoreCreateBinary();
+    if (nullptr == m_currentSenseDataReady)
+    {
+        Serial.println(F("Semaphore m_currentSenseDataReady failed"));
+        while (1)
+            ;
+    }
+    m_railcomSenseDataReady = xSemaphoreCreateBinary();
+    if (nullptr == m_railcomSenseDataReady)
+    {
+        Serial.println(F("Semaphore m_railcomSenseDataReady failed"));
+        while (1)
+            ;
+    }
     m_railcomDetectionPort = 0;
     m_railcomDetectionMeasurement = 0;
     configAdcDmaMode();
@@ -78,8 +92,7 @@ void RailcomDecoder::configInputs()
 
 void RailcomDecoder::cyclicPortCheck()
 {
-
-    if (m_currentSenseControl.triggered && !m_currentSenseControl.running && !m_currentSenseControl.processed)
+    if (pdTRUE == xSemaphoreTake(m_currentSenseDataReady, 0))
     {
         uint16_t m_currentSenseSum{0};
         for (uint16_t &measurement : m_adcDmaBufferCurrentSense)
@@ -96,46 +109,45 @@ void RailcomDecoder::cyclicPortCheck()
         m_currentSenseSum /= m_adcDmaBufferCurrentSense.size();
         bool state = m_currentSenseSum > m_trackSetVoltage;
         checkPortStatusChange(state);
-        m_currentSenseControl.processed = true;
         m_detectionPort++;
         if (m_trackData.size() > m_detectionPort)
         {
-            m_currentSenseControl.running = true;
             triggerDmaRead(m_trackData[m_detectionPort].pin, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size());
         }
         else
         {
             // no more measurements
-            m_currentSenseControl.triggered = false;
+            m_currentSenseRunning = false;
         }
     }
     ///////////////////////////////////////////////////////////////////////////
     // process Railcom data from ADC
-    if (m_railcomSenseControl.triggered && !m_railcomSenseControl.running && !m_railcomSenseControl.processed)
+    if (pdTRUE == xSemaphoreTake(m_railcomSenseDataReady, 0))
     {
         // std::array<uint16_t, 512> dmaBuffer;
         //  copy DMA buffer to make sure that data is not overwritten in case that we take to long to analyze
         // dmaBuffer = m_adcDmaBuffer;
         analyzeRailcomData((uint16_t *)m_adcDmaBufferRailcom.begin(), 400, m_trackData[m_railcomDetectionPort].voltageOffset, m_trackSetVoltage);
-
-        m_railcomSenseControl.processed = true;
-        m_railcomSenseControl.triggered = false;
         m_addrReceived = AddressType::eNone;
         // prepare already next measurement
         m_railcomDetectionMeasurement++;
         if (m_maxNumberOfConsecutiveMeasurements <= m_railcomDetectionMeasurement)
         {
             m_railcomDetectionMeasurement = 0;
-            m_railcomDetectionPort++;
+            if (m_trackData.size() <= (m_railcomDetectionPort + 1))
+            {
+                m_railcomDetectionPort = 0;
+            }
+            else
+            {
+                m_railcomDetectionPort++;
+            }
         }
-        if (m_trackData.size() <= m_railcomDetectionPort)
-        {
-            m_railcomDetectionPort = 0;
-        }
+
         //  trigger measurement of current sense
         m_detectionPort = 0;
-        m_currentSenseControl.triggered = true;
-        m_currentSenseControl.running = true;
+        m_currentSenseRunning = true;
+        m_railcomSenseRunning = false;
         triggerDmaRead(m_trackData[m_detectionPort].pin, (uint32_t *)m_adcDmaBufferCurrentSense.begin(), m_adcDmaBufferCurrentSense.size()); // 26 us
     }
 
@@ -195,11 +207,9 @@ void RailcomDecoder::onBlockEmpty()
 
 void RailcomDecoder::callbackDccReceived()
 {
-    if (!m_railcomSenseControl.triggered && !m_railcomSenseControl.running && m_railcomSenseControl.processed)
+    if (!m_currentSenseRunning && !m_railcomSenseRunning)
     {
-        m_railcomSenseControl.triggered = true;
-        m_railcomSenseControl.running = true;
-
+        m_railcomSenseRunning = true;
         // after DMA was executed, configure next channel already to save time
         triggerDmaRead(m_trackData[m_railcomDetectionPort].pin, (uint32_t *)m_adcDmaBufferRailcom.begin(), m_adcDmaBufferRailcom.size()); // 26 us
     }
@@ -220,16 +230,16 @@ void RailcomDecoder::callbackLocoAddrReceived(uint16_t addr)
 
 void RailcomDecoder::callbackAdcReadFinished(ADC_HandleTypeDef *hadc)
 {
-    if (m_currentSenseControl.triggered && m_currentSenseControl.running)
+    BaseType_t xHigherPriorityTaskWoken{pdFALSE};
+    if (m_railcomSenseRunning)
     {
-        m_currentSenseControl.running = false;
-        m_currentSenseControl.processed = false;
+        xSemaphoreGiveFromISR(m_railcomSenseDataReady, &xHigherPriorityTaskWoken);
     }
-    else if (m_railcomSenseControl.triggered && m_railcomSenseControl.running)
+    else if (m_currentSenseRunning)
     {
-        m_railcomSenseControl.running = false;
-        m_railcomSenseControl.processed = false;
+        xSemaphoreGiveFromISR(m_currentSenseDataReady, &xHigherPriorityTaskWoken);
     }
+    portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
 }
 
 bool RailcomDecoder::onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type)

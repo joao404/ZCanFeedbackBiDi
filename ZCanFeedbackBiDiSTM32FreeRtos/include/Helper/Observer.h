@@ -19,30 +19,30 @@
 #include <algorithm>
 #include <vector>
 
-template <class T> class Observable; 
+template <class... T> class Observable; 
 
-template <class T> class Observer 
+template <class... T> class Observer 
 { 
 public:
     virtual ~Observer() = default;
-    virtual void update(Observable<T>& observable, T* data) = 0;
+    virtual void update(Observable<T...>& observable, T*... data) = 0;
 };
 
-template <class T> class Observable 
+template <class... T> class Observable 
 { 
 public: 
      virtual ~Observable() = default;
-     void attach(Observer<T>& observer) { m_observer.push_back(&observer); }
-     void detach(Observer<T>& observer)
+     void attach(Observer<T...>& observer) { m_observer.push_back(&observer); }
+     void detach(Observer<T...>& observer)
      {
          m_observer.erase(std::remove(m_observer.begin(), m_observer.end(), &observer));
      }
-     void notify(T* data)
+     void notify(T*... data)
      {
          for (auto* observer : m_observer) {
-             observer->update(*this, data);
+             observer->update(*this, data...);
          }
      }
 private:
-     std::vector<Observer<T>*> m_observer; 
+     std::vector<Observer<T...>*> m_observer; 
 };

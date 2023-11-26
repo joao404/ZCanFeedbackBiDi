@@ -20,6 +20,7 @@
 #include <array>
 #include "FeedbackDecoder/FeedbackDecoder.h"
 #include "FeedbackDecoder/Railcom/Packet.h"
+#include <STM32FreeRTOS.h>
 
 class RailcomDecoder : public FeedbackDecoder
 {
@@ -85,18 +86,6 @@ protected:
                                };
     } RailcomChannelData;
 
-    typedef struct measurementControl
-    {
-        bool triggered;
-        bool running;
-        bool processed;
-        measurementControl() : triggered(false),
-                               running(false),
-                               processed(true){
-
-                               };
-    } measurementControl;
-
     enum class AddressType : uint8_t
     {
         eNone,
@@ -139,12 +128,15 @@ protected:
     bool m_railcomDebug{false};
 
     std::array<uint16_t, 128> m_adcDmaBufferCurrentSense;
+    
+    SemaphoreHandle_t m_currentSenseDataReady;
+    SemaphoreHandle_t m_railcomSenseDataReady;
 
-    measurementControl m_currentSenseControl;
+    bool m_currentSenseRunning{false};
+    bool m_railcomSenseRunning{false};
 
     std::array<uint16_t, 512> m_adcDmaBufferRailcom;
 
-    measurementControl m_railcomSenseControl;
 
     uint16_t *m_dmaBufferIN1samplePer1us;
 
