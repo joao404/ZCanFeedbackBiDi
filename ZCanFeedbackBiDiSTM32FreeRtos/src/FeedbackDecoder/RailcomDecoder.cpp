@@ -152,7 +152,7 @@ void RailcomDecoder::cyclicPortCheck()
     }
 
     // check for address data which was not renewed
-    for (auto &data : m_railcomData[m_railcomDetectionPort].railcomAddr)
+    for (auto &data : m_railcomData[m_cyclicRailcomCheckPort].railcomAddr)
     {
         // check if a address, that is currently present, was not refreshed since timeout
         if (0 != data.address)
@@ -161,20 +161,25 @@ void RailcomDecoder::cyclicPortCheck()
             {
                 if (m_railcomDebug)
                 {
-                    m_printFunc("L left:0x%X\n", data.address);
+                    m_printFunc("L leftTime:0x%X %u\n", data.address, m_cyclicRailcomCheckPort);
                 }
                 data.address = 0;
                 data.direction = 0;
                 data.lastChangeTimeINms = millis();
                 // TODO: save portnumber with trackData to use more for functions
                 // notifyLocoInBlock(m_railcomDetectionPort, m_trackData[m_detectionPort].railcomAddr);
-                notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
+                notifyLocoInBlock(m_cyclicRailcomCheckPort, m_railcomData[m_cyclicRailcomCheckPort].railcomAddr);
             }
         }
 
         // check if any change of address needs to be reported
         // used for delay reported of comming/going address
         checkRailcomDataChange(data);
+    }
+    m_cyclicRailcomCheckPort++;
+    if(m_cyclicRailcomCheckPort >= m_railcomData.size())
+    {
+    m_cyclicRailcomCheckPort = 0;
     }
 }
 
@@ -183,26 +188,35 @@ void RailcomDecoder::onBlockOccupied()
     notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
 }
 
-void RailcomDecoder::onBlockEmpty()
+void RailcomDecoder::onBlockEmpty(size_t blockNum)
 {
-    for (auto &railcomAddr : m_railcomData[m_detectionPort].railcomAddr)
+    // for (auto &block : m_railcomData)
+    // {
+    //     for (auto &loco : block.railcomAddr)
+    //     {
+    //         ZCanInterfaceObserver::m_printFunc("Blocks:0x%X %d\n", loco.address, loco.changeReported);
+    //     }
+    // }
+    RailcomData& block {m_railcomData[blockNum]};
+    for (RailcomAddr& railcomAddr : block.railcomAddr)
     {
         if (0 != railcomAddr.address)
         {
             if (m_railcomDebug)
             {
-                ZCanInterfaceObserver::m_printFunc("L left:0x%X\n", railcomAddr.address);
+                ZCanInterfaceObserver::m_printFunc("L leftBlock:0x%X %u\n", railcomAddr.address, blockNum);
             }
         }
         railcomAddr.address = 0;
         railcomAddr.direction = 0;
         railcomAddr.lastChangeTimeINms = millis();
+        railcomAddr.changeReported = false;
     }
-    m_railcomData[m_detectionPort].channel1Data[0].id = 0;
-    m_railcomData[m_detectionPort].channel1Data[1].id = 0;
-    m_railcomData[m_detectionPort].channel1Data[0].data[0] = 0;
-    m_railcomData[m_detectionPort].channel1Data[1].data[0] = 0;
-    notifyLocoInBlock(m_detectionPort, m_railcomData[m_detectionPort].railcomAddr);
+    m_railcomData[blockNum].channel1Data[0].id = 0;
+    m_railcomData[blockNum].channel1Data[1].id = 0;
+    m_railcomData[blockNum].channel1Data[0].data[0] = 0;
+    m_railcomData[blockNum].channel1Data[1].data[0] = 0;
+    notifyLocoInBlock(blockNum, m_railcomData[blockNum].railcomAddr);
 }
 
 void RailcomDecoder::callbackDccReceived()
@@ -637,6 +651,10 @@ void RailcomDecoder::checkRailcomDataChange(RailcomAddr &data)
         if ((data.lastChangeTimeINms + m_railcomDataChangeCycleINms) < currentTimeINms)
         {
             data.changeReported = true;
+            // if (m_railcomDebug)
+            // {
+            //     m_printFunc("notify:0x%X %u\n", data.address, m_railcomDetectionPort);
+            // }
             notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
         }
     }

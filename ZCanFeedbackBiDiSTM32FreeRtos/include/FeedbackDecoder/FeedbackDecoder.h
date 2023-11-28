@@ -95,7 +95,7 @@ protected:
     void checkDelayedStatusChange();
 
     virtual void onBlockOccupied();
-    virtual void onBlockEmpty();
+    virtual void onBlockEmpty(size_t blockNum);
 
     ModulConfig &m_modulConfig;
 

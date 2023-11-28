@@ -206,7 +206,7 @@ void FeedbackDecoder::checkDelayedStatusChange()
                 {
                     port.changeReported = true;
                     notifyBlockOccupied(index, 0x01, port.state);
-                    onBlockEmpty();
+                    onBlockEmpty(index);
                     if (m_debug)
                         ZCanInterfaceObserver::m_printFunc("p: %d s:%d\n", index, port.state);
                 }
@@ -260,7 +260,7 @@ void FeedbackDecoder::onBlockOccupied()
 {
 }
 
-void FeedbackDecoder::onBlockEmpty()
+void FeedbackDecoder::onBlockEmpty(size_t blockNum)
 {
 }
 

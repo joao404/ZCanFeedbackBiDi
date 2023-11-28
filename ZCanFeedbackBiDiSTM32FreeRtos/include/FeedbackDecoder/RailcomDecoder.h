@@ -41,10 +41,10 @@ public:
 protected:
     typedef struct
     {
-        uint16_t address;
-        uint16_t direction;
-        uint32_t lastChangeTimeINms;
-        bool changeReported;
+        uint16_t address{0};
+        uint16_t direction{0};
+        uint32_t lastChangeTimeINms{0};
+        bool changeReported{true};
     } RailcomAddr;
 
     typedef struct RailcomData
@@ -108,7 +108,7 @@ protected:
 
     void onBlockOccupied() override;
 
-    void onBlockEmpty() override;
+    void onBlockEmpty(size_t blockNum) override;
     // reaction on Accessory Data message
     virtual bool onAccessoryData(uint16_t accessoryId, uint8_t port, uint8_t type) override;
 
@@ -151,6 +151,8 @@ protected:
     std::array<RailcomData, 8> m_railcomData;
 
     uint8_t m_railcomDetectionPort{0};
+
+    uint8_t m_cyclicRailcomCheckPort{0};
 
     uint8_t m_railcomDetectionMeasurement{0};
 
