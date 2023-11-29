@@ -138,6 +138,7 @@ protected:
     {
         int pin;
         bool state;
+        bool reportedState;
         bool changeReported;
         uint16_t voltageOffset;
         uint32_t lastChangeTimeINms;

@@ -134,6 +134,7 @@ void FeedbackDecoder::configInputs()
     {
         pinMode(m_trackData[port].pin, INPUT_PULLUP);
         m_trackData[port].state = !digitalRead(m_trackData[port].pin);
+        m_trackData[port].reportedState = m_trackData[port].state;
         notifyBlockOccupied(port, 0x01, m_trackData[port].state);
         m_trackData[port].lastChangeTimeINms = millis();
         if (m_debug)
@@ -186,29 +187,34 @@ void FeedbackDecoder::checkDelayedStatusChange()
     uint8_t index{0};
     for (auto &port : m_trackData)
     {
-        if (!port.changeReported)
+        if (port.state != port.reportedState)
         {
-            uint32_t currentTimeINms = millis();
-            if (port.state)
+            if (!port.changeReported)
             {
-                if ((port.lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
+                uint32_t currentTimeINms = millis();
+                if (port.state)
                 {
-                    port.changeReported = true;
-                    notifyBlockOccupied(index, 0x01, port.state);
-                    onBlockOccupied();
-                    if (m_debug)
-                        ZCanInterfaceObserver::m_printFunc("p: %d s:%d\n", index, port.state);
+                    if ((port.lastChangeTimeINms + m_modulConfig.trackConfig.trackFreeToSetTimeINms) < currentTimeINms)
+                    {
+                        port.changeReported = true;
+                        port.reportedState = port.state;
+                        notifyBlockOccupied(index, 0x01, port.state);
+                        onBlockOccupied();
+                        if (m_debug)
+                            ZCanInterfaceObserver::m_printFunc("p: %d s:%d\n", index, port.state);
+                    }
                 }
-            }
-            else
-            {
-                if ((port.lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
+                else
                 {
-                    port.changeReported = true;
-                    notifyBlockOccupied(index, 0x01, port.state);
-                    onBlockEmpty(index);
-                    if (m_debug)
-                        ZCanInterfaceObserver::m_printFunc("p: %d s:%d\n", index, port.state);
+                    if ((port.lastChangeTimeINms + m_modulConfig.trackConfig.trackSetToFreeTimeINms) < currentTimeINms)
+                    {
+                        port.changeReported = true;
+                        port.reportedState = port.state;
+                        notifyBlockOccupied(index, 0x01, port.state);
+                        onBlockEmpty(index);
+                        if (m_debug)
+                            ZCanInterfaceObserver::m_printFunc("p: %d s:%d\n", index, port.state);
+                    }
                 }
             }
         }

@@ -94,7 +94,7 @@ void RailcomDecoder::cyclicPortCheck()
 {
     if (pdTRUE == xSemaphoreTake(m_currentSenseDataReady, 0))
     {
-        uint16_t m_currentSenseSum{0};
+        uint32_t m_currentSenseSum{0};
         for (uint16_t &measurement : m_adcDmaBufferCurrentSense)
         {
             if (measurement > m_trackData[m_detectionPort].voltageOffset)
