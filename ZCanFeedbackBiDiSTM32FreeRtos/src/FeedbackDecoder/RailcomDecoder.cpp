@@ -154,7 +154,7 @@ void RailcomDecoder::cyclicPortCheck()
     // check for address data which was not renewed
     for (auto &data : m_railcomData[m_cyclicRailcomCheckPort].railcomAddr)
     {
-        // check if a address, that is currently present, was not refreshed since timeout
+        // check if a address, that was already reported, was not refreshed since timeout
         if (0 != data.address)
         {
             if ((m_railcomDataTimeoutINms + data.lastChangeTimeINms) < millis())
@@ -171,15 +171,11 @@ void RailcomDecoder::cyclicPortCheck()
                 notifyLocoInBlock(m_cyclicRailcomCheckPort, m_railcomData[m_cyclicRailcomCheckPort].railcomAddr);
             }
         }
-
-        // check if any change of address needs to be reported
-        // used for delay reported of comming/going address
-        checkRailcomDataChange(data);
     }
     m_cyclicRailcomCheckPort++;
-    if(m_cyclicRailcomCheckPort >= m_railcomData.size())
+    if (m_cyclicRailcomCheckPort >= m_railcomData.size())
     {
-    m_cyclicRailcomCheckPort = 0;
+        m_cyclicRailcomCheckPort = 0;
     }
 }
 
@@ -197,8 +193,8 @@ void RailcomDecoder::onBlockEmpty(size_t blockNum)
     //         ZCanInterfaceObserver::m_printFunc("Blocks:0x%X %d\n", loco.address, loco.changeReported);
     //     }
     // }
-    RailcomData& block {m_railcomData[blockNum]};
-    for (RailcomAddr& railcomAddr : block.railcomAddr)
+    RailcomData &block{m_railcomData[blockNum]};
+    for (RailcomAddr &railcomAddr : block.railcomAddr)
     {
         if (0 != railcomAddr.address)
         {
@@ -606,8 +602,7 @@ void RailcomDecoder::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, 
                     {
                         m_printFunc("dir:0x%X 0x%X %d\n", locoAddr, direction, channel);
                     }
-                    data.changeReported = false;
-                    checkRailcomDataChange(data);
+                    notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
                 }
                 data.lastChangeTimeINms = millis();
                 break;
@@ -627,36 +622,16 @@ void RailcomDecoder::handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, 
                         m_printFunc("come:0x%X D:0x%X %d:%d\n", locoAddr, direction, m_railcomDetectionPort, channel);
                         // m_printFunc("%x %x %x %x\n", railcomData[0], railcomData[1], railcomData[2], railcomData[3]);
                     }
-                    data.changeReported = false;
-                    checkRailcomDataChange(data);
+                    notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
                     data.lastChangeTimeINms = millis();
                     break;
                 }
             }
         }
-        if (Channel::eChannel1 == channel)
-        {
-            // switch to next port because already one address for channel 1 found
-        }
-    }
-}
-
-// check if any data change needs to be reported
-void RailcomDecoder::checkRailcomDataChange(RailcomAddr &data)
-{
-    uint32_t currentTimeINms = millis();
-    if (!data.changeReported)
-    {
-
-        if ((data.lastChangeTimeINms + m_railcomDataChangeCycleINms) < currentTimeINms)
-        {
-            data.changeReported = true;
-            // if (m_railcomDebug)
-            // {
-            //     m_printFunc("notify:0x%X %u\n", data.address, m_railcomDetectionPort);
-            // }
-            notifyLocoInBlock(m_railcomDetectionPort, m_railcomData[m_railcomDetectionPort].railcomAddr);
-        }
+        // if (Channel::eChannel1 == channel)
+        // {
+        //     // switch to next port because already one address for channel 1 found
+        // }
     }
 }
 

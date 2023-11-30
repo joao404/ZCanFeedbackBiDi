@@ -120,8 +120,6 @@ protected:
 
     void handleFoundLocoAddr(uint16_t locoAddr, uint16_t direction, Channel channel, std::array<uint16_t, 4> &railcomData);
 
-    void checkRailcomDataChange(RailcomAddr &data);
-
     // address is 0x8000 up tp 0xC000
     bool notifyLocoInBlock(uint8_t port, std::array<RailcomAddr, 4> railcomAddr);
 
@@ -144,9 +142,10 @@ protected:
 
     AddressType m_addrReceived{AddressType::eNone};
 
-    uint32_t m_railcomDataTimeoutINms{2000};
+    
+    const uint32_t m_railcomDataCheckCycleINms{100};
 
-    uint32_t m_railcomDataChangeCycleINms{100};
+    uint32_t m_railcomDataTimeoutINms{2000 + m_railcomDataCheckCycleINms};
 
     std::array<RailcomData, 8> m_railcomData;
 
